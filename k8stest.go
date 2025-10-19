@@ -10,8 +10,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	k8sinternal "github.com/tom1299/k8stest/internal"
 )
 
 type Resources struct {
@@ -198,24 +199,10 @@ type TestClients struct {
 	k8sClient client.Client
 }
 
-func setupTestClients(t *testing.T) *TestClients {
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	configOverrides := &clientcmd.ConfigOverrides{}
-	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
-	cfg, err := kubeConfig.ClientConfig()
+func SetupTestClients(t *testing.T) *TestClients {
+	clientset, k8sClient, err := k8sinternal.BuildClients()
 	if err != nil {
-		t.Fatalf("Failed to get kubernetes config: %v", err)
-	}
-
-	clientset, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		t.Fatalf("Failed to create kubernetes clientSet: %v", err)
-	}
-
-	scheme := setupScheme()
-	k8sClient, err := client.New(cfg, client.Options{Scheme: scheme})
-	if err != nil {
-		t.Fatalf("Failed to create controller-runtime client: %v", err)
+		t.Fatalf("Failed to set up Kubernetes clients: %v", err)
 	}
 
 	return &TestClients{
@@ -224,7 +211,7 @@ func setupTestClients(t *testing.T) *TestClients {
 	}
 }
 
-func setupScheme() *runtime.Scheme {
+func SetupScheme() *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	_ = appsv1.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)

@@ -10,7 +10,7 @@ func TestFluent(t *testing.T) {
 	_, err := testData.WithDeployment("deployment-1").
 		WithConfigMap("config-map-1").
 		WithSecret("secret-1").
-		Create(setupTestClients(t), context.Background())
+		Create(SetupTestClients(t), context.Background())
 	if err != nil {
 		t.Error(err)
 	}
