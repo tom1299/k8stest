@@ -39,10 +39,23 @@ func TestValidateConfig(t *testing.T) {
 }
 
 func TestGetFormattedNamespace(t *testing.T) {
-	config := &Config{Namespace: "test"}
-	formatted := config.GetFormattedNamespace()
-	expected := "k8s-namespace:test"
-	if formatted != expected {
-		t.Errorf("GetFormattedNamespace() = %v, want %v", formatted, expected)
+	tests := []struct {
+		name      string
+		namespace string
+		want      string
+	}{
+		{"default namespace", "default", "k8s-namespace:default"},
+		{"custom namespace", "test", "k8s-namespace:test"},
+		{"namespace with hyphen", "my-namespace", "k8s-namespace:my-namespace"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{Namespace: tt.namespace}
+			got := config.GetFormattedNamespace()
+			if got != tt.want {
+				t.Errorf("GetFormattedNamespace() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

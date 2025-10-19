@@ -1,5 +1,4 @@
 // Package helper provides internal helper functions for k8stest.
-// This package is internal and should not be imported by external code.
 package helper
 
 import (

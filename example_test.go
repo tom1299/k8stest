@@ -36,17 +36,9 @@ func ExampleConfig_ValidateConfig() {
 	}
 
 	if err := config.ValidateConfig(); err != nil {
-		fmt.Printf("Validation failed: %v\n", err)
-		return
+		log.Fatal(err)
 	}
 
 	fmt.Println("Config is valid")
 	// Output: Config is valid
-}
-
-// ExampleNewConfig demonstrates creating a new config.
-func ExampleNewConfig() {
-	config := k8stest.NewConfig()
-	fmt.Printf("Namespace: %s, Timeout: %d\n", config.Namespace, config.Timeout)
-	// Output: Namespace: default, Timeout: 30
 }

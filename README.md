@@ -54,8 +54,6 @@ k8stest/
         └── helper_test.go  # Tests for internal package
 ```
 
-The `internal/` directory is special in Go - packages inside it can only be imported by code in the parent directory and its subdirectories, making it perfect for implementation details that shouldn't be part of the public API.
-
 ## Testing
 
 Run tests with:
