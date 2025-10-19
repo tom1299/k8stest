@@ -2,7 +2,6 @@ package k8stest
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 
@@ -33,24 +32,24 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
-func (r *Resources) Create(client *TestClients, ctx context.Context) (*Resources, error) {
+func (r *Resources) Create(testClients *TestClients, ctx context.Context) (*Resources, error) {
 	for _, configMap := range r.configMaps {
-		_, err := client.clientSet.CoreV1().ConfigMaps("default").Create(ctx, &configMap, metav1.CreateOptions{})
+		_, err := testClients.clientSet.CoreV1().ConfigMaps("default").Create(ctx, &configMap, metav1.CreateOptions{})
 		if err != nil {
-			return nil, errors.New("failed to create configmap: " + err.Error())
+			return nil, fmt.Errorf("failed to create configmap: %w", err)
 		}
 	}
 	for _, secret := range r.secrets {
-		_, err := client.clientSet.CoreV1().Secrets("default").Create(ctx, &secret, metav1.CreateOptions{})
+		_, err := testClients.clientSet.CoreV1().Secrets("default").Create(ctx, &secret, metav1.CreateOptions{})
 		if err != nil {
-			return nil, errors.New("failed to create secret: " + err.Error())
+			return nil, fmt.Errorf("failed to create secret: %w", err)
 		}
 	}
 
 	for _, deployment := range r.deployments {
-		_, err := client.clientSet.AppsV1().Deployments("default").Create(ctx, &deployment, metav1.CreateOptions{})
+		_, err := testClients.clientSet.AppsV1().Deployments("default").Create(ctx, &deployment, metav1.CreateOptions{})
 		if err != nil {
-			return nil, errors.New("failed to create deployment: " + err.Error())
+			return nil, fmt.Errorf("failed to create deployment: %w", err)
 		}
 	}
 
@@ -71,6 +70,7 @@ func (r *Resources) WithSecret(name string) *Resources {
 			"key": []byte("value"),
 		},
 	})
+
 	return r
 }
 
@@ -88,6 +88,7 @@ func (r *Resources) WithConfigMap(name string) *Resources {
 			"key": "value",
 		},
 	})
+
 	return r
 }
 
@@ -131,6 +132,7 @@ func (r *Resources) WithDeployment(name string) *Deployment {
 			},
 		},
 	})
+
 	return &Deployment{*r}
 }
 
@@ -144,7 +146,7 @@ func (d *Deployment) WithSecret(name string) *Deployment {
 
 	deployment := &d.deployments[len(d.deployments)-1]
 	deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, corev1.Volume{
-		Name: fmt.Sprintf("secret-%s", name),
+		Name: "secret-" + name,
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
 				SecretName: name,
@@ -154,7 +156,7 @@ func (d *Deployment) WithSecret(name string) *Deployment {
 
 	deployment.Spec.Template.Spec.Containers[0].VolumeMounts = append(deployment.Spec.Template.Spec.
 		Containers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      fmt.Sprintf("secret-%s", name),
+		Name:      "secret-" + name,
 		MountPath: "/etc/secret",
 	})
 
@@ -167,7 +169,7 @@ func (d *Deployment) WithConfigMap(name string) *Deployment {
 
 	deployment := &d.deployments[len(d.deployments)-1]
 	deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, corev1.Volume{
-		Name: fmt.Sprintf("config-map-%s", name),
+		Name: "config-map-" + name,
 		VolumeSource: corev1.VolumeSource{
 			ConfigMap: &corev1.ConfigMapVolumeSource{
 				LocalObjectReference: corev1.LocalObjectReference{
@@ -180,7 +182,7 @@ func (d *Deployment) WithConfigMap(name string) *Deployment {
 
 	deployment.Spec.Template.Spec.Containers[0].VolumeMounts = append(deployment.Spec.Template.Spec.
 		Containers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      fmt.Sprintf("config-map-%s", name),
+		Name:      "config-map-" + name,
 		MountPath: "/etc/config",
 	})
 
