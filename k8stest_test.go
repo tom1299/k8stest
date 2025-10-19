@@ -1,61 +1,17 @@
 package k8stest
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
-func TestNewConfig(t *testing.T) {
-	config := NewConfig()
-	if config == nil {
-		t.Fatal("NewConfig returned nil")
-	}
-	if config.Namespace != "default" {
-		t.Errorf("expected Namespace to be 'default', got '%s'", config.Namespace)
-	}
-	if config.Timeout != 30 {
-		t.Errorf("expected Timeout to be 30, got %d", config.Timeout)
-	}
-}
-
-func TestValidateConfig(t *testing.T) {
-	tests := []struct {
-		name      string
-		namespace string
-		wantErr   bool
-	}{
-		{"valid namespace", "default", false},
-		{"valid namespace with hyphen", "my-namespace", false},
-		{"empty namespace", "", true},
-		{"namespace with space", "my namespace", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := &Config{Namespace: tt.namespace}
-			err := config.ValidateConfig()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateConfig() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestGetFormattedNamespace(t *testing.T) {
-	tests := []struct {
-		name      string
-		namespace string
-		want      string
-	}{
-		{"default namespace", "default", "k8s-namespace:default"},
-		{"custom namespace", "test", "k8s-namespace:test"},
-		{"namespace with hyphen", "my-namespace", "k8s-namespace:my-namespace"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := &Config{Namespace: tt.namespace}
-			got := config.GetFormattedNamespace()
-			if got != tt.want {
-				t.Errorf("GetFormattedNamespace() = %v, want %v", got, tt.want)
-			}
-		})
+func TestFluent(t *testing.T) {
+	testData := Resources{}
+	_, err := testData.WithDeployment("deployment-1").
+		WithConfigMap("config-map-1").
+		WithSecret("secret-1").
+		Create(setupTestClients(t), context.Background())
+	if err != nil {
+		t.Error(err)
 	}
 }
