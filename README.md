@@ -2,6 +2,10 @@
 
 Minimal Go helpers for composing Kubernetes test resources with a fluent API.
 
+> [!CAUTION]
+> This code is mainly AI-generated and not intended for production use.
+
+
 ## Features
 
 - Fluent builders for common resources: Deployments, ConfigMaps, and Secrets
