@@ -25,10 +25,6 @@ type Deployment struct {
 	Resources
 }
 
-type RestartRule struct {
-	Resources
-}
-
 func boolPtr(b bool) *bool {
 	return &b
 }
