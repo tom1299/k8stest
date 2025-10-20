@@ -31,20 +31,20 @@ func boolPtr(b bool) *bool {
 
 func (r *Resources) Create(testClients *TestClients, ctx context.Context) (*Resources, error) {
 	for _, configMap := range r.configMaps {
-		_, err := testClients.clientSet.CoreV1().ConfigMaps("default").Create(ctx, &configMap, metav1.CreateOptions{})
+		_, err := testClients.ClientSet.CoreV1().ConfigMaps("default").Create(ctx, &configMap, metav1.CreateOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create configmap: %w", err)
 		}
 	}
 	for _, secret := range r.secrets {
-		_, err := testClients.clientSet.CoreV1().Secrets("default").Create(ctx, &secret, metav1.CreateOptions{})
+		_, err := testClients.ClientSet.CoreV1().Secrets("default").Create(ctx, &secret, metav1.CreateOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create secret: %w", err)
 		}
 	}
 
 	for _, deployment := range r.deployments {
-		_, err := testClients.clientSet.AppsV1().Deployments("default").Create(ctx, &deployment, metav1.CreateOptions{})
+		_, err := testClients.ClientSet.AppsV1().Deployments("default").Create(ctx, &deployment, metav1.CreateOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create deployment: %w", err)
 		}
@@ -202,8 +202,8 @@ func SetupTestClients(t *testing.T) *TestClients {
 	}
 
 	return &TestClients{
-		clientSet: clientset,
-		k8sClient: k8sClient,
+		ClientSet: clientset,
+		K8sClient: k8sClient,
 	}
 }
 
