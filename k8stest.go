@@ -191,8 +191,8 @@ func (d *Deployment) And() *Resources {
 }
 
 type TestClients struct {
-	clientSet *kubernetes.Clientset
-	k8sClient client.Client
+	ClientSet *kubernetes.Clientset
+	K8sClient client.Client
 }
 
 func SetupTestClients(t *testing.T) *TestClients {
