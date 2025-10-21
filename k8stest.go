@@ -7,6 +7,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -56,21 +57,21 @@ func (r *Resources) Create(testClients *TestClients, ctx context.Context) (*Reso
 func (r *Resources) Delete(testClients *TestClients, ctx context.Context) (*Resources, error) {
 	for _, deployment := range r.deployments {
 		err := testClients.ClientSet.AppsV1().Deployments("default").Delete(ctx, deployment.Name, metav1.DeleteOptions{})
-		if err != nil {
+		if err != nil && !apierrors.IsNotFound(err) {
 			return nil, fmt.Errorf("failed to delete deployment: %w", err)
 		}
 	}
 
 	for _, secret := range r.secrets {
 		err := testClients.ClientSet.CoreV1().Secrets("default").Delete(ctx, secret.Name, metav1.DeleteOptions{})
-		if err != nil {
+		if err != nil && !apierrors.IsNotFound(err) {
 			return nil, fmt.Errorf("failed to delete secret: %w", err)
 		}
 	}
 
 	for _, configMap := range r.configMaps {
 		err := testClients.ClientSet.CoreV1().ConfigMaps("default").Delete(ctx, configMap.Name, metav1.DeleteOptions{})
-		if err != nil {
+		if err != nil && !apierrors.IsNotFound(err) {
 			return nil, fmt.Errorf("failed to delete configmap: %w", err)
 		}
 	}
