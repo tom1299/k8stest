@@ -17,12 +17,17 @@ import (
 )
 
 type Resources struct {
-	deployments []appsv1.Deployment
-	configMaps  []corev1.ConfigMap
-	secrets     []corev1.Secret
+	deployments  []appsv1.Deployment
+	statefulSets []appsv1.StatefulSet
+	configMaps   []corev1.ConfigMap
+	secrets      []corev1.Secret
 }
 
 type Deployment struct {
+	Resources
+}
+
+type StatefulSet struct {
 	Resources
 }
 
@@ -51,10 +56,24 @@ func (r *Resources) Create(testClients *TestClients, ctx context.Context) (*Reso
 		}
 	}
 
+	for _, statefulSet := range r.statefulSets {
+		_, err := testClients.ClientSet.AppsV1().StatefulSets("default").Create(ctx, &statefulSet, metav1.CreateOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create statefulset: %w", err)
+		}
+	}
+
 	return r, nil
 }
 
 func (r *Resources) Delete(testClients *TestClients, ctx context.Context) (*Resources, error) {
+	for _, statefulSet := range r.statefulSets {
+		err := testClients.ClientSet.AppsV1().StatefulSets("default").Delete(ctx, statefulSet.Name, metav1.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("failed to delete statefulset: %w", err)
+		}
+	}
+
 	for _, deployment := range r.deployments {
 		err := testClients.ClientSet.AppsV1().Deployments("default").Delete(ctx, deployment.Name, metav1.DeleteOptions{})
 		if err != nil && !apierrors.IsNotFound(err) {
@@ -159,6 +178,51 @@ func (r *Resources) WithDeployment(name string) *Deployment {
 	return &Deployment{*r}
 }
 
+func (r *Resources) WithStatefulSet(name string) *StatefulSet {
+	r.statefulSets = append(r.statefulSets, appsv1.StatefulSet{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "StatefulSet",
+			APIVersion: "apps/appsv1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: "default",
+			Labels: map[string]string{
+				"app": name,
+			},
+		},
+		Spec: appsv1.StatefulSetSpec{
+			ServiceName: name,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": name,
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": name,
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "container-1",
+							Image: "busybox:latest",
+							Command: []string{
+								"sleep",
+								"3600",
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	return &StatefulSet{*r}
+}
+
 func (r *Resources) And() *Resources {
 	return r
 }
@@ -214,6 +278,59 @@ func (d *Deployment) WithConfigMap(name string) *Deployment {
 
 func (d *Deployment) And() *Resources {
 	return &d.Resources
+}
+
+func (s *StatefulSet) WithSecret(name string) *StatefulSet {
+	resources := &s.Resources
+	resources.WithSecret(name)
+
+	statefulSet := &s.statefulSets[len(s.statefulSets)-1]
+	statefulSet.Spec.Template.Spec.Volumes = append(statefulSet.Spec.Template.Spec.Volumes, corev1.Volume{
+		Name: "secret-" + name,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: name,
+			},
+		},
+	})
+
+	statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts = append(statefulSet.Spec.Template.Spec.
+		Containers[0].VolumeMounts, corev1.VolumeMount{
+		Name:      "secret-" + name,
+		MountPath: "/etc/secret",
+	})
+
+	return s
+}
+
+func (s *StatefulSet) WithConfigMap(name string) *StatefulSet {
+	resources := &s.Resources
+	resources.WithConfigMap(name)
+
+	statefulSet := &s.statefulSets[len(s.statefulSets)-1]
+	statefulSet.Spec.Template.Spec.Volumes = append(statefulSet.Spec.Template.Spec.Volumes, corev1.Volume{
+		Name: "config-map-" + name,
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: name,
+				},
+				Optional: boolPtr(false),
+			},
+		},
+	})
+
+	statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts = append(statefulSet.Spec.Template.Spec.
+		Containers[0].VolumeMounts, corev1.VolumeMount{
+		Name:      "config-map-" + name,
+		MountPath: "/etc/config",
+	})
+
+	return s
+}
+
+func (s *StatefulSet) And() *Resources {
+	return &s.Resources
 }
 
 type TestClients struct {
