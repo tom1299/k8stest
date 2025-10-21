@@ -53,6 +53,31 @@ func (r *Resources) Create(testClients *TestClients, ctx context.Context) (*Reso
 	return r, nil
 }
 
+func (r *Resources) Delete(testClients *TestClients, ctx context.Context) (*Resources, error) {
+	for _, deployment := range r.deployments {
+		err := testClients.ClientSet.AppsV1().Deployments("default").Delete(ctx, deployment.Name, metav1.DeleteOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete deployment: %w", err)
+		}
+	}
+
+	for _, secret := range r.secrets {
+		err := testClients.ClientSet.CoreV1().Secrets("default").Delete(ctx, secret.Name, metav1.DeleteOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete secret: %w", err)
+		}
+	}
+
+	for _, configMap := range r.configMaps {
+		err := testClients.ClientSet.CoreV1().ConfigMaps("default").Delete(ctx, configMap.Name, metav1.DeleteOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete configmap: %w", err)
+		}
+	}
+
+	return r, nil
+}
+
 func (r *Resources) WithSecret(name string) *Resources {
 	r.secrets = append(r.secrets, corev1.Secret{
 		TypeMeta: metav1.TypeMeta{

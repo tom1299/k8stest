@@ -15,3 +15,19 @@ func TestFluent(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestDelete(t *testing.T) {
+	testData := Resources{}
+	resources, err := testData.WithDeployment("deployment-delete-1").
+		WithConfigMap("config-map-delete-1").
+		WithSecret("secret-delete-1").
+		Create(SetupTestClients(t), context.Background())
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, err = resources.Delete(SetupTestClients(t), context.Background())
+	if err != nil {
+		t.Error(err)
+	}
+}
