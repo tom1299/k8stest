@@ -35,6 +35,63 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
+func createPodTemplateSpec(name string) corev1.PodTemplateSpec {
+	return corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{
+				"app": name,
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "container-1",
+					Image: "busybox:latest",
+					Command: []string{
+						"sleep",
+						"3600",
+					},
+				},
+			},
+		},
+	}
+}
+
+func attachSecretVolume(podSpec *corev1.PodSpec, secretName string) {
+	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+		Name: "secret-" + secretName,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: secretName,
+			},
+		},
+	})
+
+	podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{
+		Name:      "secret-" + secretName,
+		MountPath: "/etc/secret",
+	})
+}
+
+func attachConfigMapVolume(podSpec *corev1.PodSpec, configMapName string) {
+	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+		Name: "config-map-" + configMapName,
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: configMapName,
+				},
+				Optional: boolPtr(false),
+			},
+		},
+	})
+
+	podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{
+		Name:      "config-map-" + configMapName,
+		MountPath: "/etc/config",
+	})
+}
+
 func (r *Resources) Create(testClients *TestClients, ctx context.Context) (*Resources, error) {
 	for _, configMap := range r.configMaps {
 		_, err := testClients.ClientSet.CoreV1().ConfigMaps("default").Create(ctx, &configMap, metav1.CreateOptions{})
@@ -153,25 +210,7 @@ func (r *Resources) WithDeployment(name string) *Deployment {
 					"app": name,
 				},
 			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"app": name,
-					},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "container-1",
-							Image: "busybox:latest",
-							Command: []string{
-								"sleep",
-								"3600",
-							},
-						},
-					},
-				},
-			},
+			Template: createPodTemplateSpec(name),
 		},
 	})
 
@@ -198,25 +237,7 @@ func (r *Resources) WithStatefulSet(name string) *StatefulSet {
 					"app": name,
 				},
 			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"app": name,
-					},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "container-1",
-							Image: "busybox:latest",
-							Command: []string{
-								"sleep",
-								"3600",
-							},
-						},
-					},
-				},
-			},
+			Template: createPodTemplateSpec(name),
 		},
 	})
 
@@ -232,20 +253,7 @@ func (d *Deployment) WithSecret(name string) *Deployment {
 	resources.WithSecret(name)
 
 	deployment := &d.deployments[len(d.deployments)-1]
-	deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, corev1.Volume{
-		Name: "secret-" + name,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: name,
-			},
-		},
-	})
-
-	deployment.Spec.Template.Spec.Containers[0].VolumeMounts = append(deployment.Spec.Template.Spec.
-		Containers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      "secret-" + name,
-		MountPath: "/etc/secret",
-	})
+	attachSecretVolume(&deployment.Spec.Template.Spec, name)
 
 	return d
 }
@@ -255,23 +263,7 @@ func (d *Deployment) WithConfigMap(name string) *Deployment {
 	resources.WithConfigMap(name)
 
 	deployment := &d.deployments[len(d.deployments)-1]
-	deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, corev1.Volume{
-		Name: "config-map-" + name,
-		VolumeSource: corev1.VolumeSource{
-			ConfigMap: &corev1.ConfigMapVolumeSource{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: name,
-				},
-				Optional: boolPtr(false),
-			},
-		},
-	})
-
-	deployment.Spec.Template.Spec.Containers[0].VolumeMounts = append(deployment.Spec.Template.Spec.
-		Containers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      "config-map-" + name,
-		MountPath: "/etc/config",
-	})
+	attachConfigMapVolume(&deployment.Spec.Template.Spec, name)
 
 	return d
 }
@@ -285,20 +277,7 @@ func (s *StatefulSet) WithSecret(name string) *StatefulSet {
 	resources.WithSecret(name)
 
 	statefulSet := &s.statefulSets[len(s.statefulSets)-1]
-	statefulSet.Spec.Template.Spec.Volumes = append(statefulSet.Spec.Template.Spec.Volumes, corev1.Volume{
-		Name: "secret-" + name,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: name,
-			},
-		},
-	})
-
-	statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts = append(statefulSet.Spec.Template.Spec.
-		Containers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      "secret-" + name,
-		MountPath: "/etc/secret",
-	})
+	attachSecretVolume(&statefulSet.Spec.Template.Spec, name)
 
 	return s
 }
@@ -308,23 +287,7 @@ func (s *StatefulSet) WithConfigMap(name string) *StatefulSet {
 	resources.WithConfigMap(name)
 
 	statefulSet := &s.statefulSets[len(s.statefulSets)-1]
-	statefulSet.Spec.Template.Spec.Volumes = append(statefulSet.Spec.Template.Spec.Volumes, corev1.Volume{
-		Name: "config-map-" + name,
-		VolumeSource: corev1.VolumeSource{
-			ConfigMap: &corev1.ConfigMapVolumeSource{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: name,
-				},
-				Optional: boolPtr(false),
-			},
-		},
-	})
-
-	statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts = append(statefulSet.Spec.Template.Spec.
-		Containers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      "config-map-" + name,
-		MountPath: "/etc/config",
-	})
+	attachConfigMapVolume(&statefulSet.Spec.Template.Spec, name)
 
 	return s
 }
