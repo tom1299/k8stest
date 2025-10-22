@@ -36,7 +36,7 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           version: latest
-          args: --version
+          args: version
 
       - name: Create Kind cluster
         uses: helm/kind-action@v1
