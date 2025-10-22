@@ -76,11 +76,14 @@ func TestDeleteNonExistent(t *testing.T) {
 
 func TestDeploymentWithMutator(t *testing.T) {
 	addAnnotationOption := func(obj runtime.Object) {
-		d := obj.(*appsv1.Deployment)
-		if d.ObjectMeta.Annotations == nil {
-			d.ObjectMeta.Annotations = make(map[string]string)
+		d, ok := obj.(*appsv1.Deployment)
+		if !ok {
+			return
 		}
-		d.ObjectMeta.Annotations["test-annotation"] = "test-value"
+		if d.Annotations == nil {
+			d.Annotations = make(map[string]string)
+		}
+		d.Annotations["test-annotation"] = "test-value"
 	}
 
 	testData := Resources{
@@ -95,14 +98,18 @@ func TestDeploymentWithMutator(t *testing.T) {
 		t.Error(err)
 	}
 
-	deployment, err := clients.ClientSet.AppsV1().Deployments("default").Get(context.Background(), "deployment-with-annotation", metav1.GetOptions{})
+	deployment, err := clients.ClientSet.AppsV1().Deployments("default").Get(
+		context.Background(),
+		"deployment-with-annotation",
+		metav1.GetOptions{},
+	)
 	if err != nil {
 		t.Errorf("Failed to get deployment from cluster: %v", err)
 	}
 
-	if deployment.ObjectMeta.Annotations["test-annotation"] != "test-value" {
+	if deployment.Annotations["test-annotation"] != "test-value" {
 		t.Errorf("Expected annotation 'test-annotation' with value 'test-value', got %v",
-			deployment.ObjectMeta.Annotations)
+			deployment.Annotations)
 	}
 
 	_, err = resources.Delete(clients, context.Background())

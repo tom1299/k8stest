@@ -174,6 +174,7 @@ func (r *Resources) WithSecret(name string) *Resources {
 	})
 
 	r.ApplyMutators(&r.secrets[len(r.secrets)-1])
+
 	return r
 }
 
@@ -193,6 +194,7 @@ func (r *Resources) WithConfigMap(name string) *Resources {
 	})
 
 	r.ApplyMutators(&r.configMaps[len(r.configMaps)-1])
+
 	return r
 }
 
@@ -220,6 +222,7 @@ func (r *Resources) WithDeployment(name string) *Deployment {
 	})
 
 	r.ApplyMutators(&r.deployments[len(r.deployments)-1])
+
 	return &Deployment{*r}
 }
 
@@ -248,6 +251,7 @@ func (r *Resources) WithStatefulSet(name string) *StatefulSet {
 	})
 
 	r.ApplyMutators(&r.statefulSets[len(r.statefulSets)-1])
+
 	return &StatefulSet{*r}
 }
 
