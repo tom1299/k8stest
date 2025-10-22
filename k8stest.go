@@ -21,6 +21,7 @@ type Resources struct {
 	statefulSets []appsv1.StatefulSet
 	configMaps   []corev1.ConfigMap
 	secrets      []corev1.Secret
+	mutators     []ResourceOption
 }
 
 type Deployment struct {
@@ -30,6 +31,8 @@ type Deployment struct {
 type StatefulSet struct {
 	Resources
 }
+
+type ResourceOption func(runtime.Object)
 
 func boolPtr(b bool) *bool {
 	return &b
@@ -170,6 +173,7 @@ func (r *Resources) WithSecret(name string) *Resources {
 		},
 	})
 
+	r.ApplyMutators(&r.secrets[len(r.secrets)-1])
 	return r
 }
 
@@ -188,6 +192,7 @@ func (r *Resources) WithConfigMap(name string) *Resources {
 		},
 	})
 
+	r.ApplyMutators(&r.configMaps[len(r.configMaps)-1])
 	return r
 }
 
@@ -214,6 +219,7 @@ func (r *Resources) WithDeployment(name string) *Deployment {
 		},
 	})
 
+	r.ApplyMutators(&r.deployments[len(r.deployments)-1])
 	return &Deployment{*r}
 }
 
@@ -241,6 +247,7 @@ func (r *Resources) WithStatefulSet(name string) *StatefulSet {
 		},
 	})
 
+	r.ApplyMutators(&r.statefulSets[len(r.statefulSets)-1])
 	return &StatefulSet{*r}
 }
 
@@ -294,6 +301,12 @@ func (s *StatefulSet) WithConfigMap(name string) *StatefulSet {
 
 func (s *StatefulSet) And() *Resources {
 	return &s.Resources
+}
+
+func (r *Resources) ApplyMutators(object runtime.Object) {
+	for _, mutator := range r.mutators {
+		mutator(object)
+	}
 }
 
 type TestClients struct {
