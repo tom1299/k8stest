@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -120,6 +122,53 @@ func (r *Resources) Create(testClients *TestClients, ctx context.Context) (*Reso
 		_, err := testClients.ClientSet.AppsV1().StatefulSets("default").Create(ctx, &statefulSet, metav1.CreateOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create statefulset: %w", err)
+		}
+	}
+
+	return r, nil
+}
+
+func (r *Resources) Wait(testClients *TestClients, ctx context.Context) (*Resources, error) {
+	// Wait for all deployments to be available
+	for _, deployment := range r.deployments {
+		err := wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+			dep, err := testClients.ClientSet.AppsV1().Deployments("default").Get(ctx, deployment.Name, metav1.GetOptions{})
+			if err != nil {
+				return false, err
+			}
+
+			// Check if deployment is available
+			for _, condition := range dep.Status.Conditions {
+				if condition.Type == appsv1.DeploymentAvailable && condition.Status == corev1.ConditionTrue {
+					return true, nil
+				}
+			}
+
+			return false, nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to wait for deployment %s: %w", deployment.Name, err)
+		}
+	}
+
+	// Wait for all statefulsets to be ready
+	for _, statefulSet := range r.statefulSets {
+		err := wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+			sts, err := testClients.ClientSet.AppsV1().StatefulSets("default").Get(ctx, statefulSet.Name, metav1.GetOptions{})
+			if err != nil {
+				return false, err
+			}
+
+			// Check if statefulset is ready (all replicas are ready)
+			// A StatefulSet is ready when ReadyReplicas matches the desired Replicas count
+			if sts.Spec.Replicas != nil && sts.Status.ReadyReplicas == *sts.Spec.Replicas {
+				return true, nil
+			}
+
+			return false, nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to wait for statefulset %s: %w", statefulSet.Name, err)
 		}
 	}
 
