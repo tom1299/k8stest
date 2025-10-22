@@ -12,6 +12,8 @@ import (
 // BuildClients creates a Kubernetes clientset and a controller-runtime client
 // using the current kubeconfig context. It encapsulates the setup logic used by
 // tests, returning the constructed clients or an error.
+//
+//nolint:ireturn // Returning controller-runtime client interface is intentional
 func BuildClients() (*kubernetes.Clientset, ctrclient.Client, error) {
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	configOverrides := &clientcmd.ConfigOverrides{}

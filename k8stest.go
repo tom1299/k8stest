@@ -126,32 +126,43 @@ func (r *Resources) Create(testClients *TestClients, ctx context.Context) (*Reso
 	return r, nil
 }
 
+type deleteFunc func(ctx context.Context, name string, opts metav1.DeleteOptions) error
+
+func deleteResource(ctx context.Context, name, resourceType string, deleter deleteFunc) error {
+	err := deleter(ctx, name, metav1.DeleteOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete %s: %w", resourceType, err)
+	}
+
+	return nil
+}
+
 func (r *Resources) Delete(testClients *TestClients, ctx context.Context) (*Resources, error) {
 	for _, statefulSet := range r.statefulSets {
-		err := testClients.ClientSet.AppsV1().StatefulSets("default").Delete(ctx, statefulSet.Name, metav1.DeleteOptions{})
-		if err != nil && !apierrors.IsNotFound(err) {
-			return nil, fmt.Errorf("failed to delete statefulset: %w", err)
+		if err := deleteResource(ctx, statefulSet.Name, "statefulset",
+			testClients.ClientSet.AppsV1().StatefulSets("default").Delete); err != nil {
+			return nil, err
 		}
 	}
 
 	for _, deployment := range r.deployments {
-		err := testClients.ClientSet.AppsV1().Deployments("default").Delete(ctx, deployment.Name, metav1.DeleteOptions{})
-		if err != nil && !apierrors.IsNotFound(err) {
-			return nil, fmt.Errorf("failed to delete deployment: %w", err)
+		if err := deleteResource(ctx, deployment.Name, "deployment",
+			testClients.ClientSet.AppsV1().Deployments("default").Delete); err != nil {
+			return nil, err
 		}
 	}
 
 	for _, secret := range r.secrets {
-		err := testClients.ClientSet.CoreV1().Secrets("default").Delete(ctx, secret.Name, metav1.DeleteOptions{})
-		if err != nil && !apierrors.IsNotFound(err) {
-			return nil, fmt.Errorf("failed to delete secret: %w", err)
+		if err := deleteResource(ctx, secret.Name, "secret",
+			testClients.ClientSet.CoreV1().Secrets("default").Delete); err != nil {
+			return nil, err
 		}
 	}
 
 	for _, configMap := range r.configMaps {
-		err := testClients.ClientSet.CoreV1().ConfigMaps("default").Delete(ctx, configMap.Name, metav1.DeleteOptions{})
-		if err != nil && !apierrors.IsNotFound(err) {
-			return nil, fmt.Errorf("failed to delete configmap: %w", err)
+		if err := deleteResource(ctx, configMap.Name, "configmap",
+			testClients.ClientSet.CoreV1().ConfigMaps("default").Delete); err != nil {
+			return nil, err
 		}
 	}
 

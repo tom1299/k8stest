@@ -52,8 +52,6 @@ linters:
     - unparam
     - unused
   settings:
-    cyclop:
-      max-complexity: 15
     revive:
       rules:
         - name: comment-spacings
@@ -61,15 +59,6 @@ linters:
   exclusions:
     generated: lax
     rules:
-      - linters:
-          - nolintlint
-        path: cmd/main.go
-      - linters:
-          - lll
-        path: api/*
-      - linters:
-          - ireturn
-        path: internal/*
     paths:
       - third_party$
       - builtin$
