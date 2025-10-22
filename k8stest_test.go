@@ -58,3 +58,14 @@ func TestDeleteStatefulSet(t *testing.T) {
 		t.Error(err)
 	}
 }
+func TestDeleteNonExistent(t *testing.T) {
+	testData := Resources{}
+	resources := testData.WithDeployment("non-existent-deployment").
+		WithConfigMap("non-existent-configmap").
+		WithSecret("non-existent-secret")
+
+	_, err := resources.Delete(SetupTestClients(t), context.Background())
+	if err != nil {
+		t.Error(err)
+	}
+}
