@@ -179,27 +179,56 @@ func TestDeploymentWithInvalidImage(t *testing.T) {
 }
 
 func TestConfigurableTimeout(t *testing.T) {
-	// Test that we can configure a custom timeout
-	resources, err := New(t, context.Background()).
-		WithTimeout(45 * time.Second).
-		WithDeployment("deployment-with-custom-timeout").
-		Create()
-	if err != nil {
-		t.Error(err)
+	tests := []struct {
+		name           string
+		timeout        time.Duration
+		minExpectedDur time.Duration
+		maxExpectedDur time.Duration
+	}{
+		{
+			name:           "timeout 0 seconds",
+			timeout:        0 * time.Second,
+			minExpectedDur: 0 * time.Millisecond,
+			maxExpectedDur: 500 * time.Millisecond,
+		},
+		{
+			name:           "timeout 1 second",
+			timeout:        1 * time.Second,
+			minExpectedDur: 900 * time.Millisecond,
+			maxExpectedDur: 1500 * time.Millisecond,
+		},
 	}
 
-	// Verify the timeout is set correctly
-	if resources.timeout != 45*time.Second {
-		t.Errorf("Expected timeout to be 45s, got %v", resources.timeout)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resources, err := New(t, context.Background()).
+				WithTimeout(tt.timeout).
+				WithDeployment("deployment-timeout-test").
+				Create()
+			if err != nil {
+				t.Error(err)
+			}
 
-	_, err = resources.Wait()
-	if err != nil {
-		t.Error(err)
-	}
+			// Measure time taken for Wait to fail
+			start := time.Now()
+			_, err = resources.Wait()
+			duration := time.Since(start)
 
-	_, err = resources.Delete()
-	if err != nil {
-		t.Error(err)
+			// Wait should fail because deployment can't become ready that fast
+			if err == nil {
+				t.Error("Expected Wait to fail due to timeout, but it succeeded")
+			}
+
+			// Verify the timeout duration is within expected range
+			if duration < tt.minExpectedDur || duration > tt.maxExpectedDur {
+				t.Errorf("Expected duration between %v and %v, got %v",
+					tt.minExpectedDur, tt.maxExpectedDur, duration)
+			}
+
+			_, err = resources.Delete()
+			if err != nil {
+				t.Error(err)
+			}
+		})
 	}
 }
