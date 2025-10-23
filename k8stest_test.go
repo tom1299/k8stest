@@ -3,6 +3,7 @@ package k8stest
 import (
 	"context"
 	"testing"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -10,99 +11,90 @@ import (
 )
 
 func TestFluent(t *testing.T) {
-	testData := Resources{}
-	testClients := SetupTestClients(t)
-	resources, err := testData.WithDeployment("deployment-1").
+	resources, err := New(t, context.Background()).WithDeployment("deployment-1").
 		WithConfigMap("config-map-1").
 		WithSecret("secret-1").
-		Create(testClients, context.Background())
+		Create()
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = resources.Wait(testClients, context.Background())
+	_, err = resources.Wait()
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = resources.Delete(testClients, context.Background())
+	_, err = resources.Delete()
 	if err != nil {
 		t.Error(err)
 	}
 }
 
 func TestDelete(t *testing.T) {
-	testData := Resources{}
-	testClients := SetupTestClients(t)
-	resources, err := testData.WithDeployment("deployment-delete-1").
+	resources, err := New(t, context.Background()).WithDeployment("deployment-delete-1").
 		WithConfigMap("config-map-delete-1").
 		WithSecret("secret-delete-1").
-		Create(testClients, context.Background())
+		Create()
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = resources.Wait(testClients, context.Background())
+	_, err = resources.Wait()
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = resources.Delete(testClients, context.Background())
+	_, err = resources.Delete()
 	if err != nil {
 		t.Error(err)
 	}
 }
 
 func TestFluentStatefulSet(t *testing.T) {
-	testData := Resources{}
-	testClients := SetupTestClients(t)
-	resources, err := testData.WithStatefulSet("statefulset-1").
+	resources, err := New(t, context.Background()).WithStatefulSet("statefulset-1").
 		WithConfigMap("config-map-2").
 		WithSecret("secret-2").
-		Create(testClients, context.Background())
+		Create()
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = resources.Wait(testClients, context.Background())
+	_, err = resources.Wait()
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = resources.Delete(testClients, context.Background())
+	_, err = resources.Delete()
 	if err != nil {
 		t.Error(err)
 	}
 }
 
 func TestDeleteStatefulSet(t *testing.T) {
-	testData := Resources{}
-	testClients := SetupTestClients(t)
-	resources, err := testData.WithStatefulSet("statefulset-delete-1").
+	resources, err := New(t, context.Background()).WithStatefulSet("statefulset-delete-1").
 		WithConfigMap("config-map-delete-1").
 		WithSecret("secret-delete-1").
-		Create(testClients, context.Background())
+		Create()
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = resources.Wait(testClients, context.Background())
+	_, err = resources.Wait()
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = resources.Delete(testClients, context.Background())
+	_, err = resources.Delete()
 	if err != nil {
 		t.Error(err)
 	}
 }
 func TestDeleteNonExistent(t *testing.T) {
-	testData := Resources{}
-	resources := testData.WithDeployment("non-existent-deployment").
+	resources := New(t, context.Background()).WithDeployment("non-existent-deployment").
 		WithConfigMap("non-existent-configmap").
 		WithSecret("non-existent-secret")
 
-	_, err := resources.Delete(SetupTestClients(t), context.Background())
+	_, err := resources.Delete()
 	if err != nil {
 		t.Error(err)
 	}
@@ -120,24 +112,22 @@ func TestDeploymentWithMutator(t *testing.T) {
 		d.Annotations["test-annotation"] = "test-value"
 	}
 
-	testData := Resources{
-		mutators: []ResourceOption{addAnnotationOption},
-	}
+	resources := New(t, context.Background())
+	resources.mutators = []ResourceOption{addAnnotationOption}
 
-	clients := SetupTestClients(t)
-	resources, err := testData.
+	resources, err := resources.
 		WithDeployment("deployment-with-annotation").
-		Create(clients, context.Background())
+		Create()
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = resources.Wait(clients, context.Background())
+	_, err = resources.Wait()
 	if err != nil {
 		t.Error(err)
 	}
 
-	deployment, err := clients.ClientSet.AppsV1().Deployments("default").Get(
+	deployment, err := resources.testClients.ClientSet.AppsV1().Deployments("default").Get(
 		context.Background(),
 		"deployment-with-annotation",
 		metav1.GetOptions{},
@@ -151,7 +141,7 @@ func TestDeploymentWithMutator(t *testing.T) {
 			deployment.Annotations)
 	}
 
-	_, err = resources.Delete(clients, context.Background())
+	_, err = resources.Delete()
 	if err != nil {
 		t.Error(err)
 	}
@@ -166,26 +156,79 @@ func TestDeploymentWithInvalidImage(t *testing.T) {
 		d.Spec.Template.Spec.Containers[0].Image = "invalid-image-name-that-does-not-exist:latest"
 	}
 
-	testData := Resources{
-		mutators: []ResourceOption{setInvalidImageOption},
-	}
+	resources := New(t, context.Background())
+	resources.mutators = []ResourceOption{setInvalidImageOption}
 
-	clients := SetupTestClients(t)
-	resources, err := testData.
+	resources, err := resources.
 		WithDeployment("deployment-with-invalid-image").
-		Create(clients, context.Background())
+		Create()
 	if err != nil {
 		t.Error(err)
 	}
 
 	// Wait should fail because the deployment cannot become available with invalid image
-	_, err = resources.Wait(clients, context.Background())
+	_, err = resources.Wait()
 	if err == nil {
 		t.Error("Expected Wait to fail for deployment with invalid image, but it succeeded")
 	}
 
-	_, err = resources.Delete(clients, context.Background())
+	_, err = resources.Delete()
 	if err != nil {
 		t.Error(err)
+	}
+}
+
+func TestConfigurableTimeout(t *testing.T) {
+	tests := []struct {
+		name           string
+		timeout        time.Duration
+		minExpectedDur time.Duration
+		maxExpectedDur time.Duration
+	}{
+		{
+			name:           "timeout 0 seconds",
+			timeout:        0 * time.Second,
+			minExpectedDur: 0 * time.Millisecond,
+			maxExpectedDur: 500 * time.Millisecond,
+		},
+		{
+			name:           "timeout 1 second",
+			timeout:        1 * time.Second,
+			minExpectedDur: 900 * time.Millisecond,
+			maxExpectedDur: 1500 * time.Millisecond,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resources, err := New(t, context.Background()).
+				WithTimeout(tt.timeout).
+				WithDeployment("deployment-timeout-test").
+				Create()
+			if err != nil {
+				t.Error(err)
+			}
+
+			// Measure time taken for Wait to fail
+			start := time.Now()
+			_, err = resources.Wait()
+			duration := time.Since(start)
+
+			// Wait should fail because deployment can't become ready that fast
+			if err == nil {
+				t.Error("Expected Wait to fail due to timeout, but it succeeded")
+			}
+
+			// Verify the timeout duration is within expected range
+			if duration < tt.minExpectedDur || duration > tt.maxExpectedDur {
+				t.Errorf("Expected duration between %v and %v, got %v",
+					tt.minExpectedDur, tt.maxExpectedDur, duration)
+			}
+
+			_, err = resources.Delete()
+			if err != nil {
+				t.Error(err)
+			}
+		})
 	}
 }

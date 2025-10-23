@@ -24,6 +24,19 @@ type Resources struct {
 	configMaps   []corev1.ConfigMap
 	secrets      []corev1.Secret
 	mutators     []ResourceOption
+	testClients  *TestClients
+	ctx          context.Context
+	timeout      time.Duration
+}
+
+// New creates a new Resources object with the given TestClients and context.
+// It initializes the timeout to the default value of 30 seconds.
+func New(t *testing.T, ctx context.Context) *Resources {
+	return &Resources{
+		testClients: SetupTestClients(t),
+		ctx:         ctx,
+		timeout:     30 * time.Second,
+	}
 }
 
 type Deployment struct {
@@ -97,29 +110,29 @@ func attachConfigMapVolume(podSpec *corev1.PodSpec, configMapName string) {
 	})
 }
 
-func (r *Resources) Create(testClients *TestClients, ctx context.Context) (*Resources, error) {
+func (r *Resources) Create() (*Resources, error) {
 	for _, configMap := range r.configMaps {
-		_, err := testClients.ClientSet.CoreV1().ConfigMaps("default").Create(ctx, &configMap, metav1.CreateOptions{})
+		_, err := r.testClients.ClientSet.CoreV1().ConfigMaps("default").Create(r.ctx, &configMap, metav1.CreateOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create configmap: %w", err)
 		}
 	}
 	for _, secret := range r.secrets {
-		_, err := testClients.ClientSet.CoreV1().Secrets("default").Create(ctx, &secret, metav1.CreateOptions{})
+		_, err := r.testClients.ClientSet.CoreV1().Secrets("default").Create(r.ctx, &secret, metav1.CreateOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create secret: %w", err)
 		}
 	}
 
 	for _, deployment := range r.deployments {
-		_, err := testClients.ClientSet.AppsV1().Deployments("default").Create(ctx, &deployment, metav1.CreateOptions{})
+		_, err := r.testClients.ClientSet.AppsV1().Deployments("default").Create(r.ctx, &deployment, metav1.CreateOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create deployment: %w", err)
 		}
 	}
 
 	for _, statefulSet := range r.statefulSets {
-		_, err := testClients.ClientSet.AppsV1().StatefulSets("default").Create(ctx, &statefulSet, metav1.CreateOptions{})
+		_, err := r.testClients.ClientSet.AppsV1().StatefulSets("default").Create(r.ctx, &statefulSet, metav1.CreateOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create statefulset: %w", err)
 		}
@@ -128,10 +141,10 @@ func (r *Resources) Create(testClients *TestClients, ctx context.Context) (*Reso
 	return r, nil
 }
 
-func (r *Resources) Wait(testClients *TestClients, ctx context.Context) (*Resources, error) {
+func (r *Resources) Wait() (*Resources, error) {
 	for _, deployment := range r.deployments {
-		err := wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
-			dep, err := testClients.ClientSet.AppsV1().Deployments("default").Get(ctx, deployment.Name, metav1.GetOptions{})
+		err := wait.PollUntilContextTimeout(r.ctx, 100*time.Millisecond, r.timeout, true, func(ctx context.Context) (bool, error) {
+			dep, err := r.testClients.ClientSet.AppsV1().Deployments("default").Get(ctx, deployment.Name, metav1.GetOptions{})
 			if err != nil {
 				return false, err
 			}
@@ -144,8 +157,8 @@ func (r *Resources) Wait(testClients *TestClients, ctx context.Context) (*Resour
 	}
 
 	for _, statefulSet := range r.statefulSets {
-		err := wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
-			sts, err := testClients.ClientSet.AppsV1().StatefulSets("default").Get(ctx, statefulSet.Name, metav1.GetOptions{})
+		err := wait.PollUntilContextTimeout(r.ctx, 100*time.Millisecond, r.timeout, true, func(ctx context.Context) (bool, error) {
+			sts, err := r.testClients.ClientSet.AppsV1().StatefulSets("default").Get(ctx, statefulSet.Name, metav1.GetOptions{})
 			if err != nil {
 				return false, err
 			}
@@ -171,31 +184,31 @@ func deleteResource(ctx context.Context, name, resourceType string, deleter dele
 	return nil
 }
 
-func (r *Resources) Delete(testClients *TestClients, ctx context.Context) (*Resources, error) {
+func (r *Resources) Delete() (*Resources, error) {
 	for _, statefulSet := range r.statefulSets {
-		if err := deleteResource(ctx, statefulSet.Name, "statefulset",
-			testClients.ClientSet.AppsV1().StatefulSets("default").Delete); err != nil {
+		if err := deleteResource(r.ctx, statefulSet.Name, "statefulset",
+			r.testClients.ClientSet.AppsV1().StatefulSets("default").Delete); err != nil {
 			return nil, err
 		}
 	}
 
 	for _, deployment := range r.deployments {
-		if err := deleteResource(ctx, deployment.Name, "deployment",
-			testClients.ClientSet.AppsV1().Deployments("default").Delete); err != nil {
+		if err := deleteResource(r.ctx, deployment.Name, "deployment",
+			r.testClients.ClientSet.AppsV1().Deployments("default").Delete); err != nil {
 			return nil, err
 		}
 	}
 
 	for _, secret := range r.secrets {
-		if err := deleteResource(ctx, secret.Name, "secret",
-			testClients.ClientSet.CoreV1().Secrets("default").Delete); err != nil {
+		if err := deleteResource(r.ctx, secret.Name, "secret",
+			r.testClients.ClientSet.CoreV1().Secrets("default").Delete); err != nil {
 			return nil, err
 		}
 	}
 
 	for _, configMap := range r.configMaps {
-		if err := deleteResource(ctx, configMap.Name, "configmap",
-			testClients.ClientSet.CoreV1().ConfigMaps("default").Delete); err != nil {
+		if err := deleteResource(r.ctx, configMap.Name, "configmap",
+			r.testClients.ClientSet.CoreV1().ConfigMaps("default").Delete); err != nil {
 			return nil, err
 		}
 	}
@@ -301,6 +314,12 @@ func (r *Resources) WithStatefulSet(name string) *StatefulSet {
 }
 
 func (r *Resources) And() *Resources {
+	return r
+}
+
+// WithTimeout sets the timeout for Wait operations.
+func (r *Resources) WithTimeout(timeout time.Duration) *Resources {
+	r.timeout = timeout
 	return r
 }
 
