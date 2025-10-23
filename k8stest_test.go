@@ -159,7 +159,7 @@ func TestDeploymentWithInvalidImage(t *testing.T) {
 	resources := New(t, context.Background())
 	resources.mutators = []ResourceOption{setInvalidImageOption}
 
-	resources, err := resources.
+	resources, err := resources.WithTimeout(5 * time.Second).
 		WithDeployment("deployment-with-invalid-image").
 		Create()
 	if err != nil {
