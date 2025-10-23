@@ -20,6 +20,11 @@ func TestFluent(t *testing.T) {
 		t.Error(err)
 	}
 
+	_, err = resources.Wait(testClients, context.Background())
+	if err != nil {
+		t.Error(err)
+	}
+
 	_, err = resources.Delete(testClients, context.Background())
 	if err != nil {
 		t.Error(err)
@@ -33,6 +38,11 @@ func TestDelete(t *testing.T) {
 		WithConfigMap("config-map-delete-1").
 		WithSecret("secret-delete-1").
 		Create(testClients, context.Background())
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, err = resources.Wait(testClients, context.Background())
 	if err != nil {
 		t.Error(err)
 	}
@@ -54,6 +64,11 @@ func TestFluentStatefulSet(t *testing.T) {
 		t.Error(err)
 	}
 
+	_, err = resources.Wait(testClients, context.Background())
+	if err != nil {
+		t.Error(err)
+	}
+
 	_, err = resources.Delete(testClients, context.Background())
 	if err != nil {
 		t.Error(err)
@@ -67,6 +82,11 @@ func TestDeleteStatefulSet(t *testing.T) {
 		WithConfigMap("config-map-delete-1").
 		WithSecret("secret-delete-1").
 		Create(testClients, context.Background())
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, err = resources.Wait(testClients, context.Background())
 	if err != nil {
 		t.Error(err)
 	}
@@ -112,6 +132,11 @@ func TestDeploymentWithMutator(t *testing.T) {
 		t.Error(err)
 	}
 
+	_, err = resources.Wait(clients, context.Background())
+	if err != nil {
+		t.Error(err)
+	}
+
 	deployment, err := clients.ClientSet.AppsV1().Deployments("default").Get(
 		context.Background(),
 		"deployment-with-annotation",
@@ -124,6 +149,39 @@ func TestDeploymentWithMutator(t *testing.T) {
 	if deployment.Annotations["test-annotation"] != "test-value" {
 		t.Errorf("Expected annotation 'test-annotation' with value 'test-value', got %v",
 			deployment.Annotations)
+	}
+
+	_, err = resources.Delete(clients, context.Background())
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestDeploymentWithInvalidImage(t *testing.T) {
+	setInvalidImageOption := func(obj runtime.Object) {
+		d, ok := obj.(*appsv1.Deployment)
+		if !ok {
+			return
+		}
+		d.Spec.Template.Spec.Containers[0].Image = "invalid-image-name-that-does-not-exist:latest"
+	}
+
+	testData := Resources{
+		mutators: []ResourceOption{setInvalidImageOption},
+	}
+
+	clients := SetupTestClients(t)
+	resources, err := testData.
+		WithDeployment("deployment-with-invalid-image").
+		Create(clients, context.Background())
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Wait should fail because the deployment cannot become available with invalid image
+	_, err = resources.Wait(clients, context.Background())
+	if err == nil {
+		t.Error("Expected Wait to fail for deployment with invalid image, but it succeeded")
 	}
 
 	_, err = resources.Delete(clients, context.Background())
