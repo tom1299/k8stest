@@ -100,7 +100,7 @@ func TestDeleteNonExistent(t *testing.T) {
 	}
 }
 
-func TestDeploymentWithMutator(t *testing.T) {
+func TestDeploymentWithOption(t *testing.T) {
 	addAnnotationOption := func(obj runtime.Object) {
 		d, ok := obj.(*appsv1.Deployment)
 		if !ok {
@@ -113,7 +113,7 @@ func TestDeploymentWithMutator(t *testing.T) {
 	}
 
 	resources := New(t, context.Background())
-	resources.mutators = []ResourceOption{addAnnotationOption}
+	resources.Options = []ResourceOption{addAnnotationOption}
 
 	resources, err := resources.
 		WithDeployment("deployment-with-annotation").
@@ -127,7 +127,7 @@ func TestDeploymentWithMutator(t *testing.T) {
 		t.Error(err)
 	}
 
-	deployment, err := resources.testClients.ClientSet.AppsV1().Deployments("default").Get(
+	deployment, err := resources.TestClients.ClientSet.AppsV1().Deployments("default").Get(
 		context.Background(),
 		"deployment-with-annotation",
 		metav1.GetOptions{},
@@ -157,7 +157,7 @@ func TestDeploymentWithInvalidImage(t *testing.T) {
 	}
 
 	resources := New(t, context.Background())
-	resources.mutators = []ResourceOption{setInvalidImageOption}
+	resources.Options = []ResourceOption{setInvalidImageOption}
 
 	resources, err := resources.WithTimeout(5 * time.Second).
 		WithDeployment("deployment-with-invalid-image").
@@ -186,13 +186,13 @@ func TestConfigurableTimeout(t *testing.T) {
 		maxExpectedDur time.Duration
 	}{
 		{
-			name:           "timeout 0 seconds",
+			name:           "Timeout 0 seconds",
 			timeout:        0 * time.Second,
 			minExpectedDur: 0 * time.Millisecond,
 			maxExpectedDur: 500 * time.Millisecond,
 		},
 		{
-			name:           "timeout 1 second",
+			name:           "Timeout 1 second",
 			timeout:        1 * time.Second,
 			minExpectedDur: 900 * time.Millisecond,
 			maxExpectedDur: 1500 * time.Millisecond,
@@ -219,7 +219,7 @@ func TestConfigurableTimeout(t *testing.T) {
 				t.Error("Expected Wait to fail due to timeout, but it succeeded")
 			}
 
-			// Verify the timeout duration is within expected range
+			// Verify the Timeout duration is within expected range
 			if duration < tt.minExpectedDur || duration > tt.maxExpectedDur {
 				t.Errorf("Expected duration between %v and %v, got %v",
 					tt.minExpectedDur, tt.maxExpectedDur, duration)
