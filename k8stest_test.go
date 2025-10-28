@@ -19,12 +19,12 @@ func TestFluent(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, err = resources.Wait()
+	err = resources.Wait()
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = resources.Delete()
+	err = resources.Delete()
 	if err != nil {
 		t.Error(err)
 	}
@@ -39,12 +39,12 @@ func TestDelete(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, err = resources.Wait()
+	err = resources.Wait()
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = resources.Delete()
+	err = resources.Delete()
 	if err != nil {
 		t.Error(err)
 	}
@@ -59,12 +59,12 @@ func TestFluentStatefulSet(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, err = resources.Wait()
+	err = resources.Wait()
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = resources.Delete()
+	err = resources.Delete()
 	if err != nil {
 		t.Error(err)
 	}
@@ -79,12 +79,12 @@ func TestDeleteStatefulSet(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, err = resources.Wait()
+	err = resources.Wait()
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = resources.Delete()
+	err = resources.Delete()
 	if err != nil {
 		t.Error(err)
 	}
@@ -94,7 +94,7 @@ func TestDeleteNonExistent(t *testing.T) {
 		WithConfigMap("non-existent-configmap").
 		WithSecret("non-existent-secret")
 
-	_, err := resources.Delete()
+	err := resources.Delete()
 	if err != nil {
 		t.Error(err)
 	}
@@ -122,7 +122,7 @@ func TestDeploymentWithOption(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, err = resources.Wait()
+	err = resources.Wait()
 	if err != nil {
 		t.Error(err)
 	}
@@ -141,7 +141,7 @@ func TestDeploymentWithOption(t *testing.T) {
 			deployment.Annotations)
 	}
 
-	_, err = resources.Delete()
+	err = resources.Delete()
 	if err != nil {
 		t.Error(err)
 	}
@@ -167,12 +167,12 @@ func TestDeploymentWithInvalidImage(t *testing.T) {
 	}
 
 	// Wait should fail because the deployment cannot become available with invalid image
-	_, err = resources.Wait()
+	err = resources.Wait()
 	if err == nil {
 		t.Error("Expected Wait to fail for deployment with invalid image, but it succeeded")
 	}
 
-	_, err = resources.Delete()
+	err = resources.Delete()
 	if err != nil {
 		t.Error(err)
 	}
@@ -211,7 +211,7 @@ func TestConfigurableTimeout(t *testing.T) {
 
 			// Measure time taken for Wait to fail
 			start := time.Now()
-			_, err = resources.Wait()
+			err = resources.Wait()
 			duration := time.Since(start)
 
 			// Wait should fail because deployment can't become ready that fast
@@ -225,7 +225,7 @@ func TestConfigurableTimeout(t *testing.T) {
 					tt.minExpectedDur, tt.maxExpectedDur, duration)
 			}
 
-			_, err = resources.Delete()
+			err = resources.Delete()
 			if err != nil {
 				t.Error(err)
 			}

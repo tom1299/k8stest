@@ -141,7 +141,7 @@ func (r *Resources) Create() (*Resources, error) {
 	return r, nil
 }
 
-func (r *Resources) Wait() (*Resources, error) {
+func (r *Resources) Wait() error {
 	for _, deployment := range r.deployments {
 		err := wait.PollUntilContextTimeout(r.Ctx, 100*time.Millisecond, r.Timeout, true, func(ctx context.Context) (bool, error) {
 			dep, err := r.TestClients.ClientSet.AppsV1().Deployments("default").Get(ctx, deployment.Name, metav1.GetOptions{})
@@ -152,7 +152,7 @@ func (r *Resources) Wait() (*Resources, error) {
 			return dep.Status.AvailableReplicas == *dep.Spec.Replicas, nil
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to wait for deployment %s: %w", deployment.Name, err)
+			return fmt.Errorf("failed to wait for deployment %s: %w", deployment.Name, err)
 		}
 	}
 
@@ -166,11 +166,11 @@ func (r *Resources) Wait() (*Resources, error) {
 			return sts.Spec.Replicas != nil && sts.Status.ReadyReplicas == *sts.Spec.Replicas, nil
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to wait for statefulset %s: %w", statefulSet.Name, err)
+			return fmt.Errorf("failed to wait for statefulset %s: %w", statefulSet.Name, err)
 		}
 	}
 
-	return r, nil
+	return nil
 }
 
 type deleteFunc func(ctx context.Context, name string, opts metav1.DeleteOptions) error
@@ -184,36 +184,36 @@ func deleteResource(ctx context.Context, name, resourceType string, deleter dele
 	return nil
 }
 
-func (r *Resources) Delete() (*Resources, error) {
+func (r *Resources) Delete() error {
 	for _, statefulSet := range r.statefulSets {
 		if err := deleteResource(r.Ctx, statefulSet.Name, "statefulset",
 			r.TestClients.ClientSet.AppsV1().StatefulSets("default").Delete); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
 	for _, deployment := range r.deployments {
 		if err := deleteResource(r.Ctx, deployment.Name, "deployment",
 			r.TestClients.ClientSet.AppsV1().Deployments("default").Delete); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
 	for _, secret := range r.secrets {
 		if err := deleteResource(r.Ctx, secret.Name, "secret",
 			r.TestClients.ClientSet.CoreV1().Secrets("default").Delete); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
 	for _, configMap := range r.configMaps {
 		if err := deleteResource(r.Ctx, configMap.Name, "configmap",
 			r.TestClients.ClientSet.CoreV1().ConfigMaps("default").Delete); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	return r, nil
+	return nil
 }
 
 func (r *Resources) WithSecret(name string) *Resources {
