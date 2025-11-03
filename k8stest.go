@@ -53,6 +53,10 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
+func int64Ptr(i int64) *int64 {
+	return &i
+}
+
 func createPodTemplateSpec(name string) corev1.PodTemplateSpec {
 	return corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
@@ -68,6 +72,13 @@ func createPodTemplateSpec(name string) corev1.PodTemplateSpec {
 					Command: []string{
 						"sleep",
 						"3600",
+					},
+					Lifecycle: &corev1.Lifecycle{
+						PreStop: &corev1.LifecycleHandler{
+							Exec: &corev1.ExecAction{
+								Command: []string{"sh", "-c", "kill $(pidof sleep) || true"},
+							},
+						},
 					},
 				},
 			},
@@ -111,28 +122,36 @@ func attachConfigMapVolume(podSpec *corev1.PodSpec, configMapName string) {
 }
 
 func (r *Resources) Create() (*Resources, error) {
+	err := r.Delete()
+	if err != nil {
+		return nil, err
+	}
 	for _, configMap := range r.ConfigMaps {
-		_, err := r.TestClients.ClientSet.CoreV1().ConfigMaps("default").Create(r.Ctx, &configMap, metav1.CreateOptions{})
+		_, err := r.TestClients.ClientSet.CoreV1().ConfigMaps("default").Create(
+			r.Ctx, &configMap, metav1.CreateOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create configmap: %w", err)
 		}
 	}
 	for _, secret := range r.Secrets {
-		_, err := r.TestClients.ClientSet.CoreV1().Secrets("default").Create(r.Ctx, &secret, metav1.CreateOptions{})
+		_, err := r.TestClients.ClientSet.CoreV1().Secrets("default").Create(
+			r.Ctx, &secret, metav1.CreateOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create secret: %w", err)
 		}
 	}
 
 	for _, deployment := range r.Deployments {
-		_, err := r.TestClients.ClientSet.AppsV1().Deployments("default").Create(r.Ctx, &deployment, metav1.CreateOptions{})
+		_, err := r.TestClients.ClientSet.AppsV1().Deployments("default").Create(
+			r.Ctx, &deployment, metav1.CreateOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create deployment: %w", err)
 		}
 	}
 
 	for _, statefulSet := range r.StatefulSets {
-		_, err := r.TestClients.ClientSet.AppsV1().StatefulSets("default").Create(r.Ctx, &statefulSet, metav1.CreateOptions{})
+		_, err := r.TestClients.ClientSet.AppsV1().StatefulSets("default").Create(
+			r.Ctx, &statefulSet, metav1.CreateOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create statefulset: %w", err)
 		}
@@ -147,28 +166,32 @@ func (r *Resources) Wait(timeout ...time.Duration) error {
 		applicableTimeout = timeout[0]
 	}
 	for _, deployment := range r.Deployments {
-		err := wait.PollUntilContextTimeout(r.Ctx, 100*time.Millisecond, applicableTimeout, true, func(ctx context.Context) (bool, error) {
-			dep, err := r.TestClients.ClientSet.AppsV1().Deployments("default").Get(ctx, deployment.Name, metav1.GetOptions{})
-			if err != nil {
-				return false, err
-			}
+		err := wait.PollUntilContextTimeout(r.Ctx, 100*time.Millisecond, applicableTimeout, true,
+			func(ctx context.Context) (bool, error) {
+				dep, err := r.TestClients.ClientSet.AppsV1().Deployments("default").Get(
+					ctx, deployment.Name, metav1.GetOptions{})
+				if err != nil {
+					return false, err
+				}
 
-			return dep.Status.AvailableReplicas == *dep.Spec.Replicas, nil
-		})
+				return dep.Status.AvailableReplicas == *dep.Spec.Replicas, nil
+			})
 		if err != nil {
 			return fmt.Errorf("failed to wait for deployment %s: %w", deployment.Name, err)
 		}
 	}
 
 	for _, statefulSet := range r.StatefulSets {
-		err := wait.PollUntilContextTimeout(r.Ctx, 100*time.Millisecond, applicableTimeout, true, func(ctx context.Context) (bool, error) {
-			sts, err := r.TestClients.ClientSet.AppsV1().StatefulSets("default").Get(ctx, statefulSet.Name, metav1.GetOptions{})
-			if err != nil {
-				return false, err
-			}
+		err := wait.PollUntilContextTimeout(r.Ctx, 100*time.Millisecond, applicableTimeout, true,
+			func(ctx context.Context) (bool, error) {
+				sts, err := r.TestClients.ClientSet.AppsV1().StatefulSets("default").Get(
+					ctx, statefulSet.Name, metav1.GetOptions{})
+				if err != nil {
+					return false, err
+				}
 
-			return sts.Spec.Replicas != nil && sts.Status.ReadyReplicas == *sts.Spec.Replicas, nil
-		})
+				return sts.Spec.Replicas != nil && sts.Status.ReadyReplicas == *sts.Spec.Replicas, nil
+			})
 		if err != nil {
 			return fmt.Errorf("failed to wait for statefulset %s: %w", statefulSet.Name, err)
 		}
@@ -180,7 +203,11 @@ func (r *Resources) Wait(timeout ...time.Duration) error {
 type deleteFunc func(ctx context.Context, name string, opts metav1.DeleteOptions) error
 
 func deleteResource(ctx context.Context, name, resourceType string, deleter deleteFunc) error {
-	err := deleter(ctx, name, metav1.DeleteOptions{})
+	propagation := metav1.DeletePropagationForeground
+	err := deleter(ctx, name, metav1.DeleteOptions{
+		GracePeriodSeconds: int64Ptr(0),
+		PropagationPolicy:  &propagation,
+	})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("failed to delete %s: %w", resourceType, err)
 	}
@@ -256,6 +283,12 @@ func (r *Resources) WithConfigMap(name string) *Resources {
 	})
 
 	r.ApplyOptions(&r.ConfigMaps[len(r.ConfigMaps)-1])
+
+	return r
+}
+
+func (r *Resources) WithResourceOption(resourceOption ResourceOption) *Resources {
+	r.Options = append(r.Options, resourceOption)
 
 	return r
 }

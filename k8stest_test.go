@@ -10,8 +10,35 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+// ZeroTerminationGracePeriodOption returns a ResourceOption that sets the
+// terminationGracePeriodSeconds to 0 on the PodSpec of Deployments and StatefulSets.
+//
+//nolint:gocritic // dupBranchBody: identical branches are intentional
+func ZeroTerminationGracePeriodOption() ResourceOption {
+	return func(obj runtime.Object) {
+		switch o := obj.(type) {
+		case *appsv1.Deployment:
+			zero := int64(0)
+			if o.Spec.Template.Spec.TerminationGracePeriodSeconds == nil {
+				o.Spec.Template.Spec.TerminationGracePeriodSeconds = &zero
+			} else {
+				o.Spec.Template.Spec.TerminationGracePeriodSeconds = &zero
+			}
+		case *appsv1.StatefulSet:
+			zero := int64(0)
+			if o.Spec.Template.Spec.TerminationGracePeriodSeconds == nil {
+				o.Spec.Template.Spec.TerminationGracePeriodSeconds = &zero
+			} else {
+				o.Spec.Template.Spec.TerminationGracePeriodSeconds = &zero
+			}
+		}
+	}
+}
+
 func TestFluent(t *testing.T) {
-	resources, err := New(t, context.Background()).WithDeployment("deployment-1").
+	resources, err := New(t, context.Background()).
+		WithResourceOption(ZeroTerminationGracePeriodOption()).
+		WithDeployment("deployment-1").
 		WithConfigMap("config-map-1").
 		WithSecret("secret-1").
 		Create()
@@ -31,7 +58,8 @@ func TestFluent(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	resources, err := New(t, context.Background()).WithDeployment("deployment-delete-1").
+	resources, err := New(t, context.Background()).WithResourceOption(ZeroTerminationGracePeriodOption()).
+		WithDeployment("deployment-delete-1").
 		WithConfigMap("config-map-delete-1").
 		WithSecret("secret-delete-1").
 		Create()
@@ -51,7 +79,8 @@ func TestDelete(t *testing.T) {
 }
 
 func TestFluentStatefulSet(t *testing.T) {
-	resources, err := New(t, context.Background()).WithStatefulSet("statefulset-1").
+	resources, err := New(t, context.Background()).WithResourceOption(ZeroTerminationGracePeriodOption()).
+		WithStatefulSet("statefulset-1").
 		WithConfigMap("config-map-2").
 		WithSecret("secret-2").
 		Create()
@@ -74,6 +103,7 @@ func TestDeleteStatefulSet(t *testing.T) {
 	resources, err := New(t, context.Background()).WithStatefulSet("statefulset-delete-1").
 		WithConfigMap("config-map-delete-1").
 		WithSecret("secret-delete-1").
+		WithResourceOption(ZeroTerminationGracePeriodOption()).
 		Create()
 	if err != nil {
 		t.Error(err)
@@ -112,10 +142,8 @@ func TestDeploymentWithOption(t *testing.T) {
 		d.Annotations["test-annotation"] = "test-value"
 	}
 
-	resources := New(t, context.Background())
-	resources.Options = []ResourceOption{addAnnotationOption}
-
-	resources, err := resources.
+	resources, err := New(t, context.Background()).WithResourceOption(ZeroTerminationGracePeriodOption()).
+		WithResourceOption(addAnnotationOption).
 		WithDeployment("deployment-with-annotation").
 		Create()
 	if err != nil {
@@ -156,19 +184,31 @@ func TestDeploymentWithInvalidImage(t *testing.T) {
 		d.Spec.Template.Spec.Containers[0].Image = "invalid-image-name-that-does-not-exist:latest"
 	}
 
-	resources := New(t, context.Background())
-	resources.Options = []ResourceOption{setInvalidImageOption}
-
-	resources, err := resources.WithDeployment("deployment-with-invalid-image").
+	resources, err := New(t, context.Background()).WithResourceOption(setInvalidImageOption).
+		WithDeployment("deployment-with-invalid-image").
 		Create()
 	if err != nil {
 		t.Error(err)
 	}
 
-	// Wait should fail because the deployment cannot become available with invalid image
-	err = resources.Wait()
+	err = resources.Wait(5 * time.Second)
 	if err == nil {
 		t.Error("Expected Wait to fail for deployment with invalid image, but it succeeded")
+	}
+
+	podList, err := resources.TestClients.ClientSet.CoreV1().Pods("default").List(
+		context.Background(),
+		metav1.ListOptions{
+			LabelSelector: "app=deployment-with-invalid-image",
+		},
+	)
+	if err != nil {
+		t.Errorf("Failed to list pods: %v", err)
+	}
+
+	containerStatus := podList.Items[0].Status.ContainerStatuses[0]
+	if containerStatus.State.Waiting == nil || containerStatus.State.Waiting.Reason != "ErrImagePull" {
+		t.Errorf("Expected pod to be in 'ErrImagePull' state, but got: %v", containerStatus.State)
 	}
 
 	err = resources.Delete()
@@ -180,18 +220,21 @@ func TestDeploymentWithInvalidImage(t *testing.T) {
 func TestConfigurableTimeout(t *testing.T) {
 	tests := []struct {
 		name           string
+		deplomentName  string
 		timeout        time.Duration
 		minExpectedDur time.Duration
 		maxExpectedDur time.Duration
 	}{
 		{
 			name:           "Timeout 0 seconds",
+			deplomentName:  "deployment-timeout-test-1",
 			timeout:        0 * time.Second,
 			minExpectedDur: 0 * time.Millisecond,
 			maxExpectedDur: 500 * time.Millisecond,
 		},
 		{
 			name:           "Timeout 1 second",
+			deplomentName:  "deployment-timeout-test-2",
 			timeout:        1 * time.Second,
 			minExpectedDur: 900 * time.Millisecond,
 			maxExpectedDur: 1500 * time.Millisecond,
@@ -201,7 +244,8 @@ func TestConfigurableTimeout(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resources, err := New(t, context.Background()).
-				WithDeployment("deployment-timeout-test").
+				WithResourceOption(ZeroTerminationGracePeriodOption()).
+				WithDeployment(tt.deplomentName).
 				Create()
 			if err != nil {
 				t.Error(err)
