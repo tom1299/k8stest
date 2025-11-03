@@ -159,8 +159,7 @@ func TestDeploymentWithInvalidImage(t *testing.T) {
 	resources := New(t, context.Background())
 	resources.Options = []ResourceOption{setInvalidImageOption}
 
-	resources, err := resources.WithTimeout(5 * time.Second).
-		WithDeployment("deployment-with-invalid-image").
+	resources, err := resources.WithDeployment("deployment-with-invalid-image").
 		Create()
 	if err != nil {
 		t.Error(err)
@@ -202,7 +201,6 @@ func TestConfigurableTimeout(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resources, err := New(t, context.Background()).
-				WithTimeout(tt.timeout).
 				WithDeployment("deployment-timeout-test").
 				Create()
 			if err != nil {
@@ -211,7 +209,7 @@ func TestConfigurableTimeout(t *testing.T) {
 
 			// Measure time taken for Wait to fail
 			start := time.Now()
-			err = resources.Wait()
+			err = resources.Wait(tt.timeout)
 			duration := time.Since(start)
 
 			// Wait should fail because deployment can't become ready that fast
