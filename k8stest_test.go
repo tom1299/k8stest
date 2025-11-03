@@ -36,6 +36,7 @@ func ZeroTerminationGracePeriodOption() ResourceOption {
 }
 
 func TestFluent(t *testing.T) {
+
 	resources, err := New(t, context.Background()).
 		WithResourceOption(ZeroTerminationGracePeriodOption()).
 		WithDeployment("deployment-1").

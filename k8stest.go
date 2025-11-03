@@ -67,19 +67,18 @@ func createPodTemplateSpec(name string) corev1.PodTemplateSpec {
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
-					Name:  "container-1",
-					Image: "busybox:latest",
+					Name:            "noop-container",
+					Image:           "busybox:latest",
+					ImagePullPolicy: corev1.PullIfNotPresent,
 					Command: []string{
-						"sleep",
-						"3600",
+						"sh",
+						"-c",
+						// trap TERM, write a message to the termination log, then exit
+						"trap 'echo Terminated by SIGTERM > /dev/termination-log; exit 0' TERM;" +
+							"while true; do sleep 0.2; done",
 					},
-					Lifecycle: &corev1.Lifecycle{
-						PreStop: &corev1.LifecycleHandler{
-							Exec: &corev1.ExecAction{
-								Command: []string{"sh", "-c", "kill $(pidof sleep) || true"},
-							},
-						},
-					},
+					TerminationMessagePath:   "/dev/termination-log",
+					TerminationMessagePolicy: corev1.TerminationMessageReadFile,
 				},
 			},
 		},
@@ -203,11 +202,7 @@ func (r *Resources) Wait(timeout ...time.Duration) error {
 type deleteFunc func(ctx context.Context, name string, opts metav1.DeleteOptions) error
 
 func deleteResource(ctx context.Context, name, resourceType string, deleter deleteFunc) error {
-	propagation := metav1.DeletePropagationForeground
-	err := deleter(ctx, name, metav1.DeleteOptions{
-		GracePeriodSeconds: int64Ptr(0),
-		PropagationPolicy:  &propagation,
-	})
+	err := deleter(ctx, name, metav1.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("failed to delete %s: %w", resourceType, err)
 	}
