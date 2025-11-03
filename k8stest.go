@@ -375,6 +375,10 @@ func (r *Resources) ApplyOptions(object runtime.Object) {
 	}
 }
 
+func (r *Resources) GetResources() *Resources {
+	return r
+}
+
 type TestClients struct {
 	ClientSet *kubernetes.Clientset
 	K8sClient client.Client
