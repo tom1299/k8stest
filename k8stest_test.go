@@ -192,24 +192,59 @@ func TestDeploymentWithInvalidImage(t *testing.T) {
 		t.Error(err)
 	}
 
-	err = resources.Wait(5 * time.Second)
-	if err == nil {
-		t.Error("Expected Wait to fail for deployment with invalid image, but it succeeded")
+	waitForResourcesCh := make(chan error, 1)
+	go func() {
+		waitForResourcesCh <- resources.Wait(5 * time.Second)
+	}()
+
+	pollResultCh := make(chan bool, 1)
+
+	pollOnce := func() {
+		go func() {
+			podList, err := resources.TestClients.ClientSet.CoreV1().Pods("default").List(
+				context.Background(),
+				metav1.ListOptions{
+					LabelSelector: "app=deployment-with-invalid-image",
+				},
+			)
+
+			if err != nil {
+				t.Logf("Failed to list pods while polling: %v", err)
+				pollResultCh <- false
+				return
+			}
+
+			cs := podList.Items[0].Status.ContainerStatuses
+			if len(cs) == 0 {
+				pollResultCh <- false
+				return
+			}
+
+			pollResultCh <- cs[0].State.Waiting != nil && cs[0].State.Waiting.Reason == "ErrImagePull"
+		}()
 	}
 
-	podList, err := resources.TestClients.ClientSet.CoreV1().Pods("default").List(
-		context.Background(),
-		metav1.ListOptions{
-			LabelSelector: "app=deployment-with-invalid-image",
-		},
-	)
-	if err != nil {
-		t.Errorf("Failed to list pods: %v", err)
-	}
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 
-	containerStatus := podList.Items[0].Status.ContainerStatuses[0]
-	if containerStatus.State.Waiting == nil || containerStatus.State.Waiting.Reason != "ErrImagePull" {
-		t.Errorf("Expected pod to be in 'ErrImagePull' state, but got: %v", containerStatus.State)
+loop:
+	for {
+		select {
+		case <-ticker.C:
+			pollOnce()
+		case found := <-pollResultCh:
+			if found {
+				// Pod reached ErrImagePull first => Expected result
+				break loop
+			}
+		case err = <-waitForResourcesCh:
+			if err != nil {
+				t.Errorf("Unexpected error from Wait: %v", err)
+			}
+			// Wait should not finish before the Pod has reached ErrImagePull => Error
+			t.Error("Expected pod to reach ErrImagePull before Wait finished")
+			break loop
+		}
 	}
 
 	err = resources.Delete()

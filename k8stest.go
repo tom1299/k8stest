@@ -161,14 +161,19 @@ func (r *Resources) Create() (*Resources, error) {
 
 func (r *Resources) Wait(timeout ...time.Duration) error {
 	applicableTimeout := r.Timeout
+
+	startTime := time.Now()
+
 	if len(timeout) > 0 {
 		applicableTimeout = timeout[0]
 	}
+
 	for _, deployment := range r.Deployments {
 		err := wait.PollUntilContextTimeout(r.Ctx, 100*time.Millisecond, applicableTimeout, true,
 			func(ctx context.Context) (bool, error) {
 				dep, err := r.TestClients.ClientSet.AppsV1().Deployments("default").Get(
 					ctx, deployment.Name, metav1.GetOptions{})
+
 				if err != nil {
 					return false, err
 				}
@@ -180,11 +185,14 @@ func (r *Resources) Wait(timeout ...time.Duration) error {
 		}
 	}
 
+	applicableTimeout = applicableTimeout - time.Since(startTime)
+
 	for _, statefulSet := range r.StatefulSets {
 		err := wait.PollUntilContextTimeout(r.Ctx, 100*time.Millisecond, applicableTimeout, true,
 			func(ctx context.Context) (bool, error) {
 				sts, err := r.TestClients.ClientSet.AppsV1().StatefulSets("default").Get(
 					ctx, statefulSet.Name, metav1.GetOptions{})
+
 				if err != nil {
 					return false, err
 				}
