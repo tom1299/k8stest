@@ -53,10 +53,6 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
-func int64Ptr(i int64) *int64 {
-	return &i
-}
-
 func createPodTemplateSpec(name string) corev1.PodTemplateSpec {
 	return corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
@@ -185,10 +181,10 @@ func (r *Resources) Wait(timeout ...time.Duration) error {
 		}
 	}
 
-	applicableTimeout = applicableTimeout - time.Since(startTime)
+	remainingTime := applicableTimeout - time.Since(startTime)
 
 	for _, statefulSet := range r.StatefulSets {
-		err := wait.PollUntilContextTimeout(r.Ctx, 100*time.Millisecond, applicableTimeout, true,
+		err := wait.PollUntilContextTimeout(r.Ctx, 100*time.Millisecond, remainingTime, true,
 			func(ctx context.Context) (bool, error) {
 				sts, err := r.TestClients.ClientSet.AppsV1().StatefulSets("default").Get(
 					ctx, statefulSet.Name, metav1.GetOptions{})

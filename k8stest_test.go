@@ -35,6 +35,18 @@ func ZeroTerminationGracePeriodOption() ResourceOption {
 	}
 }
 
+// InvalidImageOption returns a ResourceOption that sets an invalid image name
+// on the first container of Deployments, causing image pull failures.
+func InvalidImageOption() ResourceOption {
+	return func(obj runtime.Object) {
+		d, ok := obj.(*appsv1.Deployment)
+		if !ok {
+			return
+		}
+		d.Spec.Template.Spec.Containers[0].Image = "invalid-image-name-that-does-not-exist:latest"
+	}
+}
+
 func TestFluent(t *testing.T) {
 
 	resources, err := New(t, context.Background()).
@@ -176,16 +188,9 @@ func TestDeploymentWithOption(t *testing.T) {
 	}
 }
 
+//nolint:cyclop // Test is complex due to asynchronous message handling
 func TestDeploymentWithInvalidImage(t *testing.T) {
-	setInvalidImageOption := func(obj runtime.Object) {
-		d, ok := obj.(*appsv1.Deployment)
-		if !ok {
-			return
-		}
-		d.Spec.Template.Spec.Containers[0].Image = "invalid-image-name-that-does-not-exist:latest"
-	}
-
-	resources, err := New(t, context.Background()).WithResourceOption(setInvalidImageOption).
+	resources, err := New(t, context.Background()).WithResourceOption(InvalidImageOption()).
 		WithDeployment("deployment-with-invalid-image").
 		Create()
 	if err != nil {
@@ -197,30 +202,17 @@ func TestDeploymentWithInvalidImage(t *testing.T) {
 		waitForResourcesCh <- resources.Wait(5 * time.Second)
 	}()
 
-	pollResultCh := make(chan bool, 1)
+	podStateCh := make(chan bool, 1)
+	errorCh := make(chan error, 1)
 
-	pollOnce := func() {
+	checkPodAsync := func() {
 		go func() {
-			podList, err := resources.TestClients.ClientSet.CoreV1().Pods("default").List(
-				context.Background(),
-				metav1.ListOptions{
-					LabelSelector: "app=deployment-with-invalid-image",
-				},
-			)
-
+			found, err := checkPodForErrImagePull(resources.TestClients)
 			if err != nil {
-				t.Logf("Failed to list pods while polling: %v", err)
-				pollResultCh <- false
-				return
+				errorCh <- err
+			} else if found {
+				podStateCh <- true
 			}
-
-			cs := podList.Items[0].Status.ContainerStatuses
-			if len(cs) == 0 {
-				pollResultCh <- false
-				return
-			}
-
-			pollResultCh <- cs[0].State.Waiting != nil && cs[0].State.Waiting.Reason == "ErrImagePull"
 		}()
 	}
 
@@ -231,18 +223,21 @@ loop:
 	for {
 		select {
 		case <-ticker.C:
-			pollOnce()
-		case found := <-pollResultCh:
-			if found {
-				// Pod reached ErrImagePull first => Expected result
-				break loop
-			}
-		case err = <-waitForResourcesCh:
-			if err != nil {
-				t.Errorf("Unexpected error from Wait: %v", err)
+			checkPodAsync()
+		case <-podStateCh:
+			// Pod has reached ErrImagePull state as expected
+			break loop
+		case pollError := <-errorCh:
+			t.Errorf("Error checking pod for state: %v", pollError)
+
+			break loop
+		case waitError := <-waitForResourcesCh:
+			if waitError != nil {
+				t.Errorf("Unexpected error from Wait: %v", waitError)
 			}
 			// Wait should not finish before the Pod has reached ErrImagePull => Error
 			t.Error("Expected pod to reach ErrImagePull before Wait finished")
+
 			break loop
 		}
 	}
@@ -251,6 +246,30 @@ loop:
 	if err != nil {
 		t.Error(err)
 	}
+}
+
+func checkPodForErrImagePull(testClients *TestClients) (bool, error) {
+	podList, err := testClients.ClientSet.CoreV1().Pods("default").List(
+		context.Background(),
+		metav1.ListOptions{
+			LabelSelector: "app=deployment-with-invalid-image",
+		},
+	)
+
+	if err != nil {
+		return false, err
+	}
+
+	if len(podList.Items) == 0 {
+		return false, nil
+	}
+
+	cs := podList.Items[0].Status.ContainerStatuses
+	if len(cs) == 0 {
+		return false, nil
+	}
+
+	return cs[0].State.Waiting != nil && cs[0].State.Waiting.Reason == "ErrImagePull", nil
 }
 
 func TestConfigurableTimeout(t *testing.T) {
