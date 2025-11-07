@@ -2,6 +2,7 @@ package k8stest
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -205,41 +206,29 @@ func TestDeploymentWithInvalidImage(t *testing.T) {
 	podStateCh := make(chan bool, 1)
 	errorCh := make(chan error, 1)
 
-	checkPodAsync := func() {
-		go func() {
-			found, err := checkPodForErrImagePull(resources.TestClients)
-			if err != nil {
-				errorCh <- err
-			} else if found {
-				podStateCh <- true
-			}
-		}()
-	}
-
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-loop:
-	for {
-		select {
-		case <-ticker.C:
-			checkPodAsync()
-		case <-podStateCh:
-			// Pod has reached ErrImagePull state as expected
-			break loop
-		case pollError := <-errorCh:
-			t.Errorf("Error checking pod for state: %v", pollError)
-
-			break loop
-		case waitError := <-waitForResourcesCh:
-			if waitError != nil {
-				t.Errorf("Unexpected error from Wait: %v", waitError)
-			}
-			// Wait should not finish before the Pod has reached ErrImagePull => Error
-			t.Error("Expected pod to reach ErrImagePull before Wait finished")
-
-			break loop
+	go func() {
+		found, err := checkPodForErrImagePull(resources.TestClients, 10*time.Second)
+		if err != nil {
+			errorCh <- err
+		} else if found {
+			podStateCh <- true
 		}
+	}()
+
+	select {
+	case <-podStateCh:
+		// Pod has reached ErrImagePull state as expected
+		break
+	case pollError := <-errorCh:
+		t.Errorf("Error checking pod for state: %v", pollError)
+		break
+	case waitError := <-waitForResourcesCh:
+		if waitError != nil {
+			t.Errorf("Unexpected error from Wait: %v", waitError)
+			break
+		}
+		// Wait should not finish before the Pod has reached ErrImagePull => Error
+		t.Error("Expected pod to reach ErrImagePull before Wait finished")
 	}
 
 	err = resources.Delete()
@@ -248,28 +237,27 @@ loop:
 	}
 }
 
-func checkPodForErrImagePull(testClients *TestClients) (bool, error) {
-	podList, err := testClients.ClientSet.CoreV1().Pods("default").List(
-		context.Background(),
-		metav1.ListOptions{
-			LabelSelector: "app=deployment-with-invalid-image",
-		},
-	)
+func checkPodForErrImagePull(testClients *TestClients, timeout time.Duration) (bool, error) {
+	for start := time.Now(); time.Since(start) < timeout; {
+		podList, err := testClients.ClientSet.CoreV1().Pods("default").List(
+			context.Background(),
+			metav1.ListOptions{
+				LabelSelector: "app=deployment-with-invalid-image",
+			},
+		)
 
-	if err != nil {
-		return false, err
+		if err != nil || len(podList.Items) == 0 || len(podList.Items[0].Status.ContainerStatuses) == 0 {
+			continue
+		}
+
+		cs := podList.Items[0].Status.ContainerStatuses
+		if cs[0].State.Waiting != nil && cs[0].State.Waiting.Reason == "ErrImagePull" {
+			return true, nil
+		}
+
+		time.Sleep(100 * time.Millisecond)
 	}
-
-	if len(podList.Items) == 0 {
-		return false, nil
-	}
-
-	cs := podList.Items[0].Status.ContainerStatuses
-	if len(cs) == 0 {
-		return false, nil
-	}
-
-	return cs[0].State.Waiting != nil && cs[0].State.Waiting.Reason == "ErrImagePull", nil
+	return false, errors.New("timed out waiting for pod to reach ErrImagePull")
 }
 
 func TestConfigurableTimeout(t *testing.T) {
