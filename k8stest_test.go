@@ -189,7 +189,6 @@ func TestDeploymentWithOption(t *testing.T) {
 	}
 }
 
-//nolint:cyclop // Test is complex due to asynchronous message handling
 func TestDeploymentWithInvalidImage(t *testing.T) {
 	resources, err := New(t, context.Background()).WithResourceOption(InvalidImageOption()).
 		WithDeployment("deployment-with-invalid-image").
@@ -221,10 +220,12 @@ func TestDeploymentWithInvalidImage(t *testing.T) {
 		break
 	case pollError := <-errorCh:
 		t.Errorf("Error checking pod for state: %v", pollError)
+
 		break
 	case waitError := <-waitForResourcesCh:
 		if waitError != nil {
 			t.Errorf("Unexpected error from Wait: %v", waitError)
+
 			break
 		}
 		// Wait should not finish before the Pod has reached ErrImagePull => Error
@@ -257,7 +258,8 @@ func checkPodForErrImagePull(testClients *TestClients, timeout time.Duration) (b
 
 		time.Sleep(100 * time.Millisecond)
 	}
-	return false, errors.New("timed out waiting for pod to reach ErrImagePull")
+	//nolint:err113 // linter rule reasons do not really apply here (no comparison, memory allocation negligible)
+	return false, errors.New("timeout waiting for pod to reach ErrImagePull")
 }
 
 func TestConfigurableTimeout(t *testing.T) {
