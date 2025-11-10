@@ -246,6 +246,12 @@ func (r *Resources) Delete() error {
 	return nil
 }
 
+func (r *Resources) Update(obj client.Object) (*Resources, error) {
+	err := r.TestClients.K8sClient.Update(*r.Ctx, obj)
+
+	return r, err
+}
+
 func (r *Resources) WithSecret(name string) *Resources {
 	r.Secrets = append(r.Secrets, &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{

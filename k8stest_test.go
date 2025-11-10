@@ -92,6 +92,44 @@ func TestDelete(t *testing.T) {
 	}
 }
 
+func TestUpdate(t *testing.T) {
+	cmName := "config-map-update-1"
+	resources, err := New(t, context.Background()).
+		WithConfigMap(cmName).
+		Create()
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	cm := resources.ConfigMaps[0]
+	cm.Data["new-key"] = "new-value"
+
+	_, err = resources.Update(cm)
+	if err != nil {
+		t.Error(err)
+	}
+
+	updatedCm, err := resources.TestClients.ClientSet.CoreV1().ConfigMaps("default").Get(
+		context.Background(),
+		cmName,
+		metav1.GetOptions{},
+	)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if updatedCm.Data["new-key"] != "new-value" {
+		t.Errorf("Expected updated ConfigMap to have new-key with value 'new-value', got %v",
+			updatedCm.Data)
+	}
+
+	err = resources.Delete()
+	if err != nil {
+		t.Error(err)
+	}
+}
+
 func TestFluentStatefulSet(t *testing.T) {
 	resources, err := New(t, context.Background()).WithResourceOption(ZeroTerminationGracePeriodOption()).
 		WithStatefulSet("statefulset-1").
