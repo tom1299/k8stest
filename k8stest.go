@@ -19,13 +19,13 @@ import (
 )
 
 type Resources struct {
-	Deployments  []appsv1.Deployment
-	StatefulSets []appsv1.StatefulSet
-	ConfigMaps   []corev1.ConfigMap
-	Secrets      []corev1.Secret
+	Deployments  []*appsv1.Deployment
+	StatefulSets []*appsv1.StatefulSet
+	ConfigMaps   []*corev1.ConfigMap
+	Secrets      []*corev1.Secret
 	Options      []ResourceOption
 	TestClients  *TestClients
-	Ctx          context.Context
+	Ctx          *context.Context
 	Timeout      time.Duration
 }
 
@@ -34,7 +34,7 @@ type Resources struct {
 func New(t *testing.T, ctx context.Context) *Resources {
 	return &Resources{
 		TestClients: SetupTestClients(t),
-		Ctx:         ctx,
+		Ctx:         &ctx,
 		Timeout:     30 * time.Second,
 	}
 }
@@ -123,14 +123,14 @@ func (r *Resources) Create() (*Resources, error) {
 	}
 	for _, configMap := range r.ConfigMaps {
 		_, err := r.TestClients.ClientSet.CoreV1().ConfigMaps("default").Create(
-			r.Ctx, &configMap, metav1.CreateOptions{})
+			*r.Ctx, configMap, metav1.CreateOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create configmap: %w", err)
 		}
 	}
 	for _, secret := range r.Secrets {
 		_, err := r.TestClients.ClientSet.CoreV1().Secrets("default").Create(
-			r.Ctx, &secret, metav1.CreateOptions{})
+			*r.Ctx, secret, metav1.CreateOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create secret: %w", err)
 		}
@@ -138,7 +138,7 @@ func (r *Resources) Create() (*Resources, error) {
 
 	for _, deployment := range r.Deployments {
 		_, err := r.TestClients.ClientSet.AppsV1().Deployments("default").Create(
-			r.Ctx, &deployment, metav1.CreateOptions{})
+			*r.Ctx, deployment, metav1.CreateOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create deployment: %w", err)
 		}
@@ -146,7 +146,7 @@ func (r *Resources) Create() (*Resources, error) {
 
 	for _, statefulSet := range r.StatefulSets {
 		_, err := r.TestClients.ClientSet.AppsV1().StatefulSets("default").Create(
-			r.Ctx, &statefulSet, metav1.CreateOptions{})
+			*r.Ctx, statefulSet, metav1.CreateOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create statefulset: %w", err)
 		}
@@ -165,7 +165,7 @@ func (r *Resources) Wait(timeout ...time.Duration) error {
 	}
 
 	for _, deployment := range r.Deployments {
-		err := wait.PollUntilContextTimeout(r.Ctx, 100*time.Millisecond, applicableTimeout, true,
+		err := wait.PollUntilContextTimeout(*r.Ctx, 100*time.Millisecond, applicableTimeout, true,
 			func(ctx context.Context) (bool, error) {
 				dep, err := r.TestClients.ClientSet.AppsV1().Deployments("default").Get(
 					ctx, deployment.Name, metav1.GetOptions{})
@@ -184,7 +184,7 @@ func (r *Resources) Wait(timeout ...time.Duration) error {
 	remainingTime := applicableTimeout - time.Since(startTime)
 
 	for _, statefulSet := range r.StatefulSets {
-		err := wait.PollUntilContextTimeout(r.Ctx, 100*time.Millisecond, remainingTime, true,
+		err := wait.PollUntilContextTimeout(*r.Ctx, 100*time.Millisecond, remainingTime, true,
 			func(ctx context.Context) (bool, error) {
 				sts, err := r.TestClients.ClientSet.AppsV1().StatefulSets("default").Get(
 					ctx, statefulSet.Name, metav1.GetOptions{})
@@ -216,28 +216,28 @@ func deleteResource(ctx context.Context, name, resourceType string, deleter dele
 
 func (r *Resources) Delete() error {
 	for _, statefulSet := range r.StatefulSets {
-		if err := deleteResource(r.Ctx, statefulSet.Name, "statefulset",
+		if err := deleteResource(*r.Ctx, statefulSet.Name, "statefulset",
 			r.TestClients.ClientSet.AppsV1().StatefulSets("default").Delete); err != nil {
 			return err
 		}
 	}
 
 	for _, deployment := range r.Deployments {
-		if err := deleteResource(r.Ctx, deployment.Name, "deployment",
+		if err := deleteResource(*r.Ctx, deployment.Name, "deployment",
 			r.TestClients.ClientSet.AppsV1().Deployments("default").Delete); err != nil {
 			return err
 		}
 	}
 
 	for _, secret := range r.Secrets {
-		if err := deleteResource(r.Ctx, secret.Name, "secret",
+		if err := deleteResource(*r.Ctx, secret.Name, "secret",
 			r.TestClients.ClientSet.CoreV1().Secrets("default").Delete); err != nil {
 			return err
 		}
 	}
 
 	for _, configMap := range r.ConfigMaps {
-		if err := deleteResource(r.Ctx, configMap.Name, "configmap",
+		if err := deleteResource(*r.Ctx, configMap.Name, "configmap",
 			r.TestClients.ClientSet.CoreV1().ConfigMaps("default").Delete); err != nil {
 			return err
 		}
@@ -247,7 +247,7 @@ func (r *Resources) Delete() error {
 }
 
 func (r *Resources) WithSecret(name string) *Resources {
-	r.Secrets = append(r.Secrets, corev1.Secret{
+	r.Secrets = append(r.Secrets, &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Secret",
 			APIVersion: "appsv1",
@@ -261,13 +261,13 @@ func (r *Resources) WithSecret(name string) *Resources {
 		},
 	})
 
-	r.ApplyOptions(&r.Secrets[len(r.Secrets)-1])
+	r.ApplyOptions(r.Secrets[len(r.Secrets)-1])
 
 	return r
 }
 
 func (r *Resources) WithConfigMap(name string) *Resources {
-	r.ConfigMaps = append(r.ConfigMaps, corev1.ConfigMap{
+	r.ConfigMaps = append(r.ConfigMaps, &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
 			APIVersion: "v1",
@@ -281,7 +281,7 @@ func (r *Resources) WithConfigMap(name string) *Resources {
 		},
 	})
 
-	r.ApplyOptions(&r.ConfigMaps[len(r.ConfigMaps)-1])
+	r.ApplyOptions(r.ConfigMaps[len(r.ConfigMaps)-1])
 
 	return r
 }
@@ -293,7 +293,7 @@ func (r *Resources) WithResourceOption(resourceOption ResourceOption) *Resources
 }
 
 func (r *Resources) WithDeployment(name string) *Deployment {
-	r.Deployments = append(r.Deployments, appsv1.Deployment{
+	r.Deployments = append(r.Deployments, &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Deployment",
 			APIVersion: "apps/appsv1",
@@ -315,13 +315,13 @@ func (r *Resources) WithDeployment(name string) *Deployment {
 		},
 	})
 
-	r.ApplyOptions(&r.Deployments[len(r.Deployments)-1])
+	r.ApplyOptions(r.Deployments[len(r.Deployments)-1])
 
 	return &Deployment{*r}
 }
 
 func (r *Resources) WithStatefulSet(name string) *StatefulSet {
-	r.StatefulSets = append(r.StatefulSets, appsv1.StatefulSet{
+	r.StatefulSets = append(r.StatefulSets, &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "StatefulSet",
 			APIVersion: "apps/appsv1",
@@ -344,7 +344,7 @@ func (r *Resources) WithStatefulSet(name string) *StatefulSet {
 		},
 	})
 
-	r.ApplyOptions(&r.StatefulSets[len(r.StatefulSets)-1])
+	r.ApplyOptions(r.StatefulSets[len(r.StatefulSets)-1])
 
 	return &StatefulSet{*r}
 }
@@ -357,7 +357,7 @@ func (d *Deployment) WithSecret(name string) *Deployment {
 	resources := &d.Resources
 	resources.WithSecret(name)
 
-	deployment := &d.Deployments[len(d.Deployments)-1]
+	deployment := d.Deployments[len(d.Deployments)-1]
 	attachSecretVolume(&deployment.Spec.Template.Spec, name)
 
 	return d
@@ -367,7 +367,7 @@ func (d *Deployment) WithConfigMap(name string) *Deployment {
 	resources := &d.Resources
 	resources.WithConfigMap(name)
 
-	deployment := &d.Deployments[len(d.Deployments)-1]
+	deployment := d.Deployments[len(d.Deployments)-1]
 	attachConfigMapVolume(&deployment.Spec.Template.Spec, name)
 
 	return d
@@ -381,7 +381,7 @@ func (s *StatefulSet) WithSecret(name string) *StatefulSet {
 	resources := &s.Resources
 	resources.WithSecret(name)
 
-	statefulSet := &s.StatefulSets[len(s.StatefulSets)-1]
+	statefulSet := s.StatefulSets[len(s.StatefulSets)-1]
 	attachSecretVolume(&statefulSet.Spec.Template.Spec, name)
 
 	return s
@@ -391,7 +391,7 @@ func (s *StatefulSet) WithConfigMap(name string) *StatefulSet {
 	resources := &s.Resources
 	resources.WithConfigMap(name)
 
-	statefulSet := &s.StatefulSets[len(s.StatefulSets)-1]
+	statefulSet := s.StatefulSets[len(s.StatefulSets)-1]
 	attachConfigMapVolume(&statefulSet.Spec.Template.Spec, name)
 
 	return s
@@ -417,13 +417,13 @@ type TestClients struct {
 }
 
 func SetupTestClients(t *testing.T) *TestClients {
-	clientset, k8sClient, err := k8sinternal.BuildClients()
+	clientSet, k8sClient, err := k8sinternal.BuildClients()
 	if err != nil {
 		t.Fatalf("Failed to set up Kubernetes clients: %v", err)
 	}
 
 	return &TestClients{
-		ClientSet: clientset,
+		ClientSet: clientSet,
 		K8sClient: k8sClient,
 	}
 }
